@@ -4,20 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listSuppliers } from "@/lib/queries";
+import { getDictionary } from "@/lib/i18n/server";
 import {
   DeleteContactButton,
   EditContactButton,
   NewContactButton,
 } from "../contacts-ui";
 
-export const metadata = { title: "Suppliers" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.suppliers };
+}
 
-export default function SuppliersPage() {
+export default async function SuppliersPage() {
+  const { contacts } = await getDictionary();
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="Suppliers"
-        description="Where your stock comes from."
+        title={contacts.suppliersTitle}
+        description={contacts.suppliersDescription}
         actions={<NewContactButton kind="suppliers" />}
       />
       <Suspense fallback={<PageSkeleton />}>
@@ -29,7 +34,11 @@ export default function SuppliersPage() {
 
 async function SuppliersTable() {
   const auth = await requireAuth();
-  const rows = await listSuppliers(auth.org.id);
+  const [rows, dict] = await Promise.all([
+    listSuppliers(auth.org.id),
+    getDictionary(),
+  ]);
+  const c = dict.contacts;
 
   return (
     <Card>
@@ -37,22 +46,22 @@ async function SuppliersTable() {
         <Table>
           <THead>
             <TR>
-              <TH>Name</TH>
-              <TH>Email</TH>
-              <TH>Phone</TH>
+              <TH>{c.name}</TH>
+              <TH>{c.email}</TH>
+              <TH>{c.phone}</TH>
               <TH className="w-20" />
             </TR>
           </THead>
           <TBody>
-            {rows.map((s) => (
-              <TR key={s.id}>
-                <TD className="font-medium">{s.name}</TD>
-                <TD className="text-zinc-500">{s.email ?? "—"}</TD>
-                <TD className="text-zinc-500">{s.phone ?? "—"}</TD>
+            {rows.map((row) => (
+              <TR key={row.id}>
+                <TD className="font-medium">{row.name}</TD>
+                <TD className="text-zinc-500">{row.email ?? "—"}</TD>
+                <TD className="text-zinc-500">{row.phone ?? "—"}</TD>
                 <TD>
                   <div className="flex items-center justify-end gap-1">
-                    <EditContactButton kind="suppliers" contact={s} />
-                    <DeleteContactButton kind="suppliers" id={s.id} name={s.name} />
+                    <EditContactButton kind="suppliers" contact={row} />
+                    <DeleteContactButton kind="suppliers" id={row.id} name={row.name} />
                   </div>
                 </TD>
               </TR>
@@ -60,7 +69,7 @@ async function SuppliersTable() {
             {rows.length === 0 ? (
               <TR>
                 <TD colSpan={4} className="py-10 text-center text-zinc-500">
-                  No suppliers yet.
+                  {c.noSuppliers}
                 </TD>
               </TR>
             ) : null}

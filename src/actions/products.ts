@@ -6,16 +6,20 @@ import { z } from "zod";
 import { assertUuid, withTenant } from "@/db";
 import { products, stockMovements } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
+import { getDictionary } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 import { centsFromInput, type FormState } from "@/lib/form";
 
-const productSchema = z.object({
-  sku: z.string().trim().min(1, "SKU is required.").max(40),
-  name: z.string().trim().min(1, "Name is required.").max(120),
-  category: z.string().trim().max(60).default("general"),
-  minStock: z.coerce.number().int().min(0),
-});
-
-function productFields(formData: FormData) {
+function productFields(
+  formData: FormData,
+  messages: { skuRequired: string; nameRequired: string },
+) {
+  const productSchema = z.object({
+    sku: z.string().trim().min(1, messages.skuRequired).max(40),
+    name: z.string().trim().min(1, messages.nameRequired).max(120),
+    category: z.string().trim().max(60).default("general"),
+    minStock: z.coerce.number().int().min(0),
+  });
   return productSchema.safeParse({
     sku: formData.get("sku"),
     name: formData.get("name"),
@@ -29,7 +33,11 @@ export async function createProductAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
-  const parsed = productFields(formData);
+  const dict = await getDictionary();
+  const parsed = productFields(formData, {
+    skuRequired: dict.actions.skuRequired,
+    nameRequired: dict.actions.nameRequired,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const priceCents = centsFromInput(formData.get("price"));
   const costRaw = String(formData.get("cost") ?? "").trim();
@@ -38,10 +46,10 @@ export async function createProductAction(
     String(formData.get("openingQty") ?? "0"),
     10,
   );
-  if (Number.isNaN(priceCents)) return { error: "Invalid selling price." };
-  if (Number.isNaN(costCents)) return { error: "Invalid cost price." };
+  if (Number.isNaN(priceCents)) return { error: dict.actions.invalidSellingPrice };
+  if (Number.isNaN(costCents)) return { error: dict.actions.invalidCostPrice };
   if (!Number.isFinite(openingQty) || openingQty < 0) {
-    return { error: "Opening stock must be a non-negative number." };
+    return { error: dict.actions.openingStockInvalid };
   }
 
   const { sku, name, category, minStock } = parsed.data;
@@ -76,14 +84,14 @@ export async function createProductAction(
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("products_org_sku")) {
-      return { error: `SKU "${sku}" already exists.` };
+      return { error: interpolate(dict.actions.skuExists, { sku }) };
     }
     throw err;
   }
 
   revalidatePath("/products");
   revalidatePath("/dashboard");
-  return { ok: `Product ${sku} created.` };
+  return { ok: interpolate(dict.actions.productCreated, { sku }) };
 }
 
 export async function updateProductAction(
@@ -91,14 +99,18 @@ export async function updateProductAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
   const id = assertUuid(String(formData.get("id") ?? ""));
-  const parsed = productFields(formData);
+  const parsed = productFields(formData, {
+    skuRequired: dict.actions.skuRequired,
+    nameRequired: dict.actions.nameRequired,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const priceCents = centsFromInput(formData.get("price"));
   const costRaw = String(formData.get("cost") ?? "").trim();
   const costCents = costRaw === "" ? 0 : centsFromInput(costRaw);
-  if (Number.isNaN(priceCents)) return { error: "Invalid selling price." };
-  if (Number.isNaN(costCents)) return { error: "Invalid cost price." };
+  if (Number.isNaN(priceCents)) return { error: dict.actions.invalidSellingPrice };
+  if (Number.isNaN(costCents)) return { error: dict.actions.invalidCostPrice };
 
   const { sku, name, category, minStock } = parsed.data;
   const updated = await withTenant(auth.org.id, async (tx) => {
@@ -117,10 +129,10 @@ export async function updateProductAction(
       .returning({ id: products.id });
     return row ?? null;
   });
-  if (!updated) return { error: "Product not found." };
+  if (!updated) return { error: dict.actions.productNotFound };
 
   revalidatePath("/products");
-  return { ok: `Product ${sku} updated.` };
+  return { ok: interpolate(dict.actions.productUpdated, { sku }) };
 }
 
 export async function deleteProductAction(formData: FormData): Promise<void> {
@@ -132,7 +144,7 @@ export async function deleteProductAction(formData: FormData): Promise<void> {
     );
     if (used.used) {
       throw new Error(
-        "Product is referenced by invoices or purchase orders and cannot be deleted. Deactivate it instead.",
+        await getDictionary().then((d) => d.actions.productReferenced),
       );
     }
     await tx.delete(products).where(eq(products.id, id));
@@ -145,11 +157,12 @@ export async function adjustStockAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
   const id = assertUuid(String(formData.get("id") ?? ""));
   const delta = Number.parseInt(String(formData.get("delta") ?? ""), 10);
   const note = String(formData.get("note") ?? "").slice(0, 200);
   if (!Number.isFinite(delta) || delta === 0) {
-    return { error: "Adjustment must be a non-zero number." };
+    return { error: dict.actions.adjustmentInvalid };
   }
 
   const result = await withTenant(auth.org.id, async (tx) => {
@@ -168,12 +181,15 @@ export async function adjustStockAction(
     });
     return product;
   });
-  if (!result) return { error: "Product not found." };
+  if (!result) return { error: dict.actions.productNotFound };
 
   revalidatePath("/products");
   revalidatePath("/dashboard");
   return {
-    ok: `Stock for ${result.sku} adjusted. New quantity: ${result.stockQty}.`,
+    ok: interpolate(dict.actions.stockAdjusted, {
+      sku: result.sku,
+      qty: result.stockQty,
+    }),
   };
 }
 

@@ -12,14 +12,13 @@ import { requireAuth } from "@/lib/auth";
 import { PO_TRANSITIONS } from "@/lib/business";
 import { getPoDetail } from "@/lib/queries";
 import { fmtDate, fmtMoney } from "@/lib/utils";
+import { getDictionary, getDateLocale } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 
-export const metadata = { title: "Purchase order" };
-
-const ACTION_LABELS: Record<string, string> = {
-  sent: "Mark as sent",
-  received: "Receive stock",
-  void: "Void PO",
-};
+export async function generateMetadata() {
+  const { poDetail } = await getDictionary();
+  return { title: poDetail.title };
+}
 
 export default async function PoDetailPage({
   params,
@@ -41,22 +40,32 @@ async function PoDetail({
   const { id } = await params;
   const poId = id;
   const auth = await requireAuth();
-  const po = await getPoDetail(auth.org.id, poId);
+  const [po, dict, dateLocale] = await Promise.all([
+    getPoDetail(auth.org.id, poId),
+    getDictionary(),
+    getDateLocale(),
+  ]);
   if (!po) notFound();
+  const d = dict.poDetail;
 
   const currency = auth.org.currency;
   const nextStatuses = PO_TRANSITIONS[po.status];
+  const actionLabels: Record<string, string> = {
+    sent: d.markSent,
+    received: d.receive,
+    void: d.void,
+  };
 
   return (
     <>
       <PageHeader
         title={po.number}
-        description={`${po.supplierName} · ordered ${fmtDate(po.orderDate)}${po.expectedDate ? ` · expected ${fmtDate(po.expectedDate)}` : ""}`}
+        description={`${po.supplierName} · ${interpolate(d.orderedOn, { date: fmtDate(po.orderDate, dateLocale) })}${po.expectedDate ? ` · ${interpolate(d.expectedOn, { date: fmtDate(po.expectedDate, dateLocale) })}` : ""}`}
         actions={
           <>
             <Link href="/purchase-orders">
               <Button variant="ghost" size="sm">
-                <ArrowLeft /> All POs
+                <ArrowLeft /> {d.allPos}
               </Button>
             </Link>
             {nextStatuses.map((status) => (
@@ -68,7 +77,7 @@ async function PoDetail({
                   size="sm"
                   variant={status === "void" ? "outline" : "default"}
                 >
-                  {ACTION_LABELS[status] ?? status}
+                  {actionLabels[status] ?? status}
                 </Button>
               </form>
             ))}
@@ -79,17 +88,17 @@ async function PoDetail({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Items</CardTitle>
+            <CardTitle>{d.items}</CardTitle>
             <StatusBadge status={po.status} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             <Table>
               <THead>
                 <TR>
-                  <TH>Description</TH>
-                  <TH className="text-right">Qty</TH>
-                  <TH className="text-right">Unit cost</TH>
-                  <TH className="text-right">Total</TH>
+                  <TH>{d.description}</TH>
+                  <TH className="text-right">{d.qty}</TH>
+                  <TH className="text-right">{d.unitCost}</TH>
+                  <TH className="text-right">{d.total}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -112,19 +121,19 @@ async function PoDetail({
 
         <Card>
           <CardHeader>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle>{d.summary}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5 text-sm">
             <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold">
-              <span>Subtotal</span>
+              <span>{d.subtotal}</span>
               <span>{fmtMoney(po.subtotalCents, currency)}</span>
             </div>
             <div className="pt-3 text-xs text-zinc-500">
-              <p>Supplier: {po.supplierName}</p>
+              <p>{interpolate(d.supplierLabel, { name: po.supplierName })}</p>
               {po.supplierEmail ? <p>{po.supplierEmail}</p> : null}
               {po.status === "received" ? (
                 <p className="mt-2 rounded-lg bg-emerald-50 p-2 text-emerald-700">
-                  Received — stock levels were updated for each line.
+                  {d.receivedNote}
                 </p>
               ) : null}
               {po.notes ? (

@@ -10,30 +10,27 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listInvoices } from "@/lib/queries";
 import { fmtMoney } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 import type { InvoiceStatus } from "@/lib/business";
 
-export const metadata = { title: "Invoices" };
-
-const FILTERS: { key: string; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "draft", label: "Draft" },
-  { key: "sent", label: "Sent" },
-  { key: "overdue", label: "Overdue" },
-  { key: "paid", label: "Paid" },
-];
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.invoices };
+}
 
 export default async function InvoicesPage({
   searchParams,
 }: PageProps<"/invoices">) {
+  const { invoices } = await getDictionary();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Invoices"
-        description="Billing lifecycle: draft → sent → paid."
+        title={invoices.title}
+        description={invoices.description}
         actions={
           <Link href="/invoices/new">
             <Button size="sm">
-              <Plus /> New invoice
+              <Plus /> {invoices.newInvoice}
             </Button>
           </Link>
         }
@@ -54,7 +51,11 @@ async function InvoicesTable({
   const status = typeof params.status === "string" ? params.status : "all";
 
   const auth = await requireAuth();
-  const all = await listInvoices(auth.org.id);
+  const [all, dict] = await Promise.all([
+    listInvoices(auth.org.id),
+    getDictionary(),
+  ]);
+  const { invoices, dashboard, status: statusLabels } = dict;
   const filtered =
     status === "all"
       ? all
@@ -62,10 +63,18 @@ async function InvoicesTable({
         ? all.filter((i) => i.overdue)
         : all.filter((i) => i.status === (status as InvoiceStatus));
 
+  const filters: { key: string; label: string }[] = [
+    { key: "all", label: invoices.filterAll },
+    { key: "draft", label: statusLabels.draft },
+    { key: "sent", label: statusLabels.sent },
+    { key: "overdue", label: statusLabels.overdue },
+    { key: "paid", label: statusLabels.paid },
+  ];
+
   return (
     <>
       <div className="flex flex-wrap gap-1.5">
-        {FILTERS.map((f) => (
+        {filters.map((f) => (
           <Link
             key={f.key}
             href={f.key === "all" ? "/invoices" : `/invoices?status=${f.key}`}
@@ -85,26 +94,20 @@ async function InvoicesTable({
           <Table>
             <THead>
               <TR>
-                <TH>Number</TH>
-                <TH>Customer</TH>
-                <TH>Issued</TH>
+                <TH>{dashboard.number}</TH>
+                <TH>{dashboard.customer}</TH>
+                <TH>{dashboard.issued}</TH>
                 <TH>
                   <span className="flex items-center gap-1">
-                    Due
-                    <InfoTip
-                      side="bottom"
-                      text="Payment due date. Sent invoices past this date automatically count as Overdue in filters and on the dashboard."
-                    />
+                    {dashboard.due}
+                    <InfoTip side="bottom" text={invoices.dueInfo} />
                   </span>
                 </TH>
-                <TH className="text-right">Total</TH>
+                <TH className="text-right">{dashboard.total}</TH>
                 <TH>
                   <span className="flex items-center gap-1">
-                    Status
-                    <InfoTip
-                      side="bottom"
-                      text="Draft → Sent → Paid. Drafts can still be edited and do not affect revenue; Sent invoices are owed; Paid closes them; Void cancels."
-                    />
+                    {dashboard.status}
+                    <InfoTip side="bottom" text={invoices.statusInfo} />
                   </span>
                 </TH>
               </TR>
@@ -134,7 +137,7 @@ async function InvoicesTable({
               {filtered.length === 0 ? (
                 <TR>
                   <TD colSpan={6} className="py-10 text-center text-zinc-500">
-                    No invoices in this view.
+                    {invoices.noneInThisView}
                   </TD>
                 </TR>
               ) : null}

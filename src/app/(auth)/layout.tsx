@@ -1,7 +1,14 @@
 import { Wallet } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
+import { getDictionary } from "@/lib/i18n/server";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { auth } = await getDictionary();
   return (
     <main className="flex flex-1 items-center justify-center bg-zinc-50 px-4 py-16">
       <div className="w-full max-w-sm">
@@ -10,13 +17,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Wallet className="size-5" />
           </span>
           <span className="text-lg font-semibold tracking-tight">UangLite</span>
-          <ThemeToggle className="absolute -right-1 top-1/2 -translate-y-1/2" />
+          <span className="absolute -right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <LanguageToggle />
+            <ThemeToggle />
+          </span>
         </div>
         {children}
         <p className="mt-4 text-center text-xs text-zinc-500">
-          New to UangLite?{" "}
+          {auth.newHere}{" "}
           <a href="/faq" className="font-medium text-emerald-700 hover:underline">
-            What is this app? Read the FAQ
+            {auth.whatIsThisApp}
           </a>
         </p>
       </div>

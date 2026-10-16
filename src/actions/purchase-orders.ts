@@ -18,37 +18,47 @@ import {
   type PoStatus,
 } from "@/lib/business";
 import type { FormState } from "@/lib/form";
+import { getDictionary } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 import { todayIso } from "@/lib/utils";
 
-const itemSchema = z.object({
-  productId: z.uuid(),
-  qty: z.coerce.number().int().min(1),
-  unitCostCents: z.coerce.number().int().min(0),
-});
-
-const createSchema = z.object({
-  supplierId: z.uuid("Select a supplier."),
-  orderDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  expectedDate: z
-    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")])
-    .optional(),
-  notes: z.string().trim().max(500).optional(),
-  items: z.array(itemSchema).min(1, "Add at least one line item."),
-});
+function createSchema(messages: {
+  selectSupplier: string;
+  addLineItem: string;
+}) {
+  const itemSchema = z.object({
+    productId: z.uuid(),
+    qty: z.coerce.number().int().min(1),
+    unitCostCents: z.coerce.number().int().min(0),
+  });
+  return z.object({
+    supplierId: z.uuid(messages.selectSupplier),
+    orderDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    expectedDate: z
+      .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal("")])
+      .optional(),
+    notes: z.string().trim().max(500).optional(),
+    items: z.array(itemSchema).min(1, messages.addLineItem),
+  });
+}
 
 export async function createPoAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
 
   let rawItems: unknown = [];
   try {
     rawItems = JSON.parse(String(formData.get("items") ?? "[]"));
   } catch {
-    return { error: "Invalid line items payload." };
+    return { error: dict.actions.invalidItems };
   }
-  const parsed = createSchema.safeParse({
+  const parsed = createSchema({
+    selectSupplier: dict.actions.selectSupplier,
+    addLineItem: dict.actions.addLineItem,
+  }).safeParse({
     supplierId: formData.get("supplierId"),
     orderDate: formData.get("orderDate") || todayIso(),
     expectedDate: formData.get("expectedDate") || "",
@@ -74,7 +84,7 @@ export async function createPoAction(
     const byId = new Map(productRows.map((p) => [p.id, p]));
     for (const item of items) {
       if (!byId.has(item.productId)) {
-        throw new Error("One of the selected products no longer exists.");
+        throw new Error(dict.actions.productMissing);
       }
     }
 
@@ -135,6 +145,7 @@ export async function updatePoStatusAction(
   formData: FormData,
 ): Promise<void> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
   const id = assertUuid(String(formData.get("id") ?? ""));
   const to = String(formData.get("status") ?? "") as PoStatus;
 
@@ -145,9 +156,14 @@ export async function updatePoStatusAction(
       .where(eq(purchaseOrders.id, id))
       .for("update")
       .limit(1);
-    if (!po) throw new Error("Purchase order not found.");
+    if (!po) throw new Error(dict.actions.poNotFound);
     if (!canTransitionPo(po.status, to)) {
-      throw new Error(`Cannot change status from ${po.status} to ${to}.`);
+      throw new Error(
+        interpolate(dict.actions.cannotTransition, {
+          from: po.status,
+          to,
+        }),
+      );
     }
 
     if (to === "received") {

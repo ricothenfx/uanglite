@@ -6,6 +6,8 @@ import { createPoAction } from "@/actions/purchase-orders";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { fmtMoney } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/provider";
+import { interpolate } from "@/lib/i18n/translate";
 import type { FormState } from "@/lib/form";
 
 type ProductOption = {
@@ -36,6 +38,8 @@ export function PoForm({
   currency: string;
   todayIso: string;
 }) {
+  const { dict } = useI18n();
+  const f = dict.poForm;
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     createPoAction,
     {},
@@ -56,7 +60,7 @@ export function PoForm({
   if (products.length === 0 || suppliers.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center text-sm text-zinc-500">
-        Add products and suppliers first to create a purchase order.
+        {f.needProductAndSupplier}
       </p>
     );
   }
@@ -77,7 +81,7 @@ export function PoForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label htmlFor="supplierId">Supplier</Label>
+          <Label htmlFor="supplierId">{f.supplier}</Label>
           <Select id="supplierId" name="supplierId" required>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
@@ -87,11 +91,11 @@ export function PoForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="orderDate">Order date</Label>
+          <Label htmlFor="orderDate">{f.orderDate}</Label>
           <Input id="orderDate" name="orderDate" type="date" defaultValue={todayIso} required />
         </div>
         <div>
-          <Label htmlFor="expectedDate">Expected date</Label>
+          <Label htmlFor="expectedDate">{f.expectedDate}</Label>
           <Input id="expectedDate" name="expectedDate" type="date" />
         </div>
       </div>
@@ -100,10 +104,10 @@ export function PoForm({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-zinc-500">
-              <th className="px-4 py-2.5 font-medium">Product</th>
-              <th className="px-4 py-2.5 font-medium w-24">Qty</th>
-              <th className="px-4 py-2.5 font-medium w-36">Unit cost</th>
-              <th className="px-4 py-2.5 font-medium text-right w-32">Line total</th>
+              <th className="px-4 py-2.5 font-medium">{f.product}</th>
+              <th className="px-4 py-2.5 font-medium w-24">{f.qty}</th>
+              <th className="px-4 py-2.5 font-medium w-36">{f.unitCost}</th>
+              <th className="px-4 py-2.5 font-medium text-right w-32">{f.lineTotal}</th>
               <th className="w-12" />
             </tr>
           </thead>
@@ -120,7 +124,7 @@ export function PoForm({
                         unitCostCents: product?.costCents ?? line.unitCostCents,
                       });
                     }}
-                    aria-label="Product"
+                    aria-label={f.product}
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -137,7 +141,7 @@ export function PoForm({
                     onChange={(e) =>
                       updateLine(line.key, { qty: Math.max(1, Number(e.target.value) || 1) })
                     }
-                    aria-label="Quantity"
+                    aria-label={f.qty}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -154,7 +158,7 @@ export function PoForm({
                         ),
                       })
                     }
-                    aria-label="Unit cost"
+                    aria-label={f.unitCost}
                   />
                 </td>
                 <td className="px-4 py-2 text-right font-medium">
@@ -167,7 +171,7 @@ export function PoForm({
                       setLines((ls) => ls.filter((l) => l.key !== line.key))
                     }
                     className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600"
-                    aria-label="Remove line"
+                    aria-label={f.removeLine}
                     disabled={lines.length === 1}
                   >
                     <Trash2 className="size-3.5" />
@@ -184,17 +188,17 @@ export function PoForm({
             size="sm"
             onClick={() => setLines((ls) => [...ls, newLine(products)])}
           >
-            <Plus /> Add line
+            <Plus /> {f.addLine}
           </Button>
           <span className="text-sm font-semibold">
-            Subtotal: {fmtMoney(subtotal, currency)}
+            {interpolate(f.subtotal, { amount: fmtMoney(subtotal, currency) })}
           </span>
         </div>
       </div>
 
       <div className="w-full max-w-xs space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" placeholder="Delivery instructions…" />
+        <Label htmlFor="notes">{f.notes}</Label>
+        <Textarea id="notes" name="notes" placeholder={f.notesPlaceholder} />
       </div>
 
       {state.error ? (
@@ -205,7 +209,7 @@ export function PoForm({
 
       <div className="flex justify-end">
         <Button type="submit" disabled={pending || lines.length === 0}>
-          {pending ? "Creating…" : "Create draft PO"}
+          {pending ? f.creating : f.createDraft}
         </Button>
       </div>
     </form>

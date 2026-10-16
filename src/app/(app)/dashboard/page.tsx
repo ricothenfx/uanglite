@@ -9,15 +9,21 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { getDashboardData } from "@/lib/queries";
 import { fmtCompactMoney, fmtDate, fmtMoney } from "@/lib/utils";
+import { getDictionary, getDateLocale } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 
-export const metadata = { title: "Dashboard" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.dashboard };
+}
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { dashboard } = await getDictionary();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Dashboard"
-        description="Live overview of revenue, receivables and stock health."
+        title={dashboard.title}
+        description={dashboard.description}
       />
       <Suspense fallback={<PageSkeleton />}>
         <DashboardContent />
@@ -28,39 +34,51 @@ export default function DashboardPage() {
 
 async function DashboardContent() {
   const auth = await requireAuth();
-  const data = await getDashboardData(auth.org.id);
+  const [data, dict, dateLocale] = await Promise.all([
+    getDashboardData(auth.org.id),
+    getDictionary(),
+    getDateLocale(),
+  ]);
+  const { dashboard } = dict;
   const currency = auth.org.currency;
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Revenue this month"
+          label={dashboard.revenue}
           value={fmtCompactMoney(data.revenueMtdCents, currency)}
-          hint="Invoices issued (paid + sent)"
-          info="Sum of all invoice totals issued this calendar month, including paid and still-unpaid (sent) invoices. Drafts are excluded until you send them."
+          hint={dashboard.revenueHint}
+          info={dashboard.revenueInfo}
           icon={<Banknote className="size-4" />}
         />
         <StatCard
-          label="Outstanding"
+          label={dashboard.outstanding}
           value={fmtCompactMoney(data.outstanding.cents, currency)}
-          hint={`${data.outstanding.count} sent invoice${data.outstanding.count === 1 ? "" : "s"} unpaid`}
-          info="Money your customers still owe you: invoices that have been sent but not yet paid or voided. This is your accounts receivable."
+          hint={interpolate(
+            data.outstanding.count === 1
+              ? dashboard.outstandingHintOne
+              : dashboard.outstandingHintOther,
+            { count: data.outstanding.count },
+          )}
+          info={dashboard.outstandingInfo}
           icon={<Clock className="size-4" />}
         />
         <StatCard
-          label="Overdue"
+          label={dashboard.overdue}
           value={String(data.overdue.count)}
-          hint={fmtCompactMoney(data.overdue.cents, currency) + " past due date"}
-          info="Sent invoices that passed their due date without full payment. A good shortlist for payment reminders — the Pilot AI can draft them for you."
+          hint={interpolate(dashboard.overdueHint, {
+            amount: fmtCompactMoney(data.overdue.cents, currency),
+          })}
+          info={dashboard.overdueInfo}
           tone={data.overdue.count > 0 ? "danger" : "default"}
           icon={<AlertTriangle className="size-4" />}
         />
         <StatCard
-          label="Low stock"
+          label={dashboard.lowStock}
           value={String(data.lowStock.count)}
-          hint="Products at or below minimum"
-          info="Products whose quantity on hand reached the minimum stock level (the reorder point you set per product). Negative numbers mean overselling happened."
+          hint={dashboard.lowStockHint}
+          info={dashboard.lowStockInfo}
           tone={data.lowStock.count > 0 ? "warning" : "default"}
           icon={<PackageSearch className="size-4" />}
         />
@@ -70,14 +88,15 @@ async function DashboardContent() {
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-1">
-              Revenue — last 6 months
-              <InfoTip text="Total invoiced value per month over the last six months, based on invoice issue date. Bars are drawn to scale against the busiest month." />
+              {dashboard.revenueChart}
+              <InfoTip text={dashboard.revenueChartInfo} />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <RevenueChart
               data={data.monthRevenue}
               currency={currency}
+              dateLocale={dateLocale}
             />
           </CardContent>
         </Card>
@@ -85,15 +104,13 @@ async function DashboardContent() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-1">
-              Stock alerts
-              <InfoTip text="Products currently at or below their minimum stock level. Treat these as your immediate restock list — receive a purchase order or adjust stock to clear an alert." />
+              {dashboard.stockAlerts}
+              <InfoTip text={dashboard.stockAlertsInfo} />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {data.lowStock.items.length === 0 ? (
-              <p className="text-xs text-zinc-500">
-                All products are above their minimum stock level.
-              </p>
+              <p className="text-xs text-zinc-500">{dashboard.allStockHealthy}</p>
             ) : (
               data.lowStock.items.map((item) => (
                 <div
@@ -105,7 +122,7 @@ async function DashboardContent() {
                       {item.sku} — {item.name}
                     </p>
                     <p className="text-[11px] text-zinc-500">
-                      min {item.minStock}
+                      {interpolate(dashboard.min, { count: item.minStock })}
                     </p>
                   </div>
                   <span
@@ -122,24 +139,21 @@ async function DashboardContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent invoices</CardTitle>
+          <CardTitle>{dashboard.recentInvoices}</CardTitle>
         </CardHeader>
         <CardContent className="px-0 pb-2">
           <Table>
             <THead>
               <TR>
-                <TH>Number</TH>
-                <TH>Customer</TH>
-                <TH>Issued</TH>
-                <TH>Due</TH>
-                <TH className="text-right">Total</TH>
+                <TH>{dashboard.number}</TH>
+                <TH>{dashboard.customer}</TH>
+                <TH>{dashboard.issued}</TH>
+                <TH>{dashboard.due}</TH>
+                <TH className="text-right">{dashboard.total}</TH>
                 <TH>
                   <span className="flex items-center gap-1">
-                    Status
-                    <InfoTip
-                      side="bottom"
-                      text="Invoice lifecycle: Draft → Sent → Paid (or Void). Sent invoices that pass their due date show as Overdue until paid."
-                    />
+                    {dashboard.status}
+                    <InfoTip side="bottom" text={dashboard.statusInfo} />
                   </span>
                 </TH>
               </TR>
@@ -156,8 +170,8 @@ async function DashboardContent() {
                     </a>
                   </TD>
                   <TD>{inv.customerName}</TD>
-                  <TD>{fmtDate(inv.issueDate)}</TD>
-                  <TD>{fmtDate(inv.dueDate)}</TD>
+                  <TD>{fmtDate(inv.issueDate, dateLocale)}</TD>
+                  <TD>{fmtDate(inv.dueDate, dateLocale)}</TD>
                   <TD className="text-right">
                     {fmtMoney(inv.totalCents, currency)}
                   </TD>
@@ -169,7 +183,7 @@ async function DashboardContent() {
               {data.recentInvoices.length === 0 ? (
                 <TR>
                   <TD colSpan={6} className="py-8 text-center text-zinc-500">
-                    No invoices yet.
+                    {dashboard.noInvoices}
                   </TD>
                 </TR>
               ) : null}
@@ -184,11 +198,13 @@ async function DashboardContent() {
 function RevenueChart({
   data,
   currency,
+  dateLocale,
 }: {
   data: { month: string; cents: number }[];
   currency: string;
+  dateLocale: string;
 }) {
-  const months = last6Months();
+  const months = last6Months(dateLocale);
   const values = months.map((m) => data.find((d) => d.month === m.key)?.cents ?? 0);
   const max = Math.max(...values, 1);
 
@@ -217,7 +233,7 @@ function RevenueChart({
   );
 }
 
-function last6Months() {
+function last6Months(locale: string) {
   const out: { key: string; label: string }[] = [];
   const d = new Date();
   d.setDate(1);
@@ -226,7 +242,7 @@ function last6Months() {
     dt.setMonth(d.getMonth() - i);
     out.push({
       key: dt.toISOString().slice(0, 7),
-      label: dt.toLocaleDateString("en-SG", { month: "short" }),
+      label: dt.toLocaleDateString(locale, { month: "short" }),
     });
   }
   return out;

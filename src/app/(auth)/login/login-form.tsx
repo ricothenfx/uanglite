@@ -5,9 +5,12 @@ import Link from "next/link";
 import { loginAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { useI18n } from "@/lib/i18n/provider";
 import type { FormState } from "@/lib/form";
 
 export function LoginForm() {
+  const { dict } = useI18n();
+  const { auth } = dict;
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     loginAction,
     {},
@@ -16,18 +19,18 @@ export function LoginForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{auth.email}</Label>
         <Input
           id="email"
           name="email"
           type="email"
-          placeholder="you@company.com"
+          placeholder={auth.emailPlaceholder}
           defaultValue="demo@uanglite.dev"
           required
         />
       </div>
       <div>
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{auth.password}</Label>
         <Input
           id="password"
           name="password"
@@ -43,12 +46,12 @@ export function LoginForm() {
         </p>
       ) : null}
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? auth.signingIn : auth.signIn}
       </Button>
       <p className="text-center text-xs text-zinc-500">
-        No workspace yet?{" "}
+        {auth.noWorkspaceYet}{" "}
         <Link href="/register" className="font-medium text-emerald-700 hover:underline">
-          Create one
+          {auth.createOne}
         </Link>
       </p>
     </form>

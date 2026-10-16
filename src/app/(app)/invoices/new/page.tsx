@@ -3,16 +3,21 @@ import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { requireAuth } from "@/lib/auth";
 import { listCustomers, listProducts } from "@/lib/queries";
 import { addDaysIso, todayIso } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 import { InvoiceForm } from "./invoice-form";
 
-export const metadata = { title: "New invoice" };
+export async function generateMetadata() {
+  const { invoices, invoiceForm } = await getDictionary();
+  return { title: invoiceForm.title ?? invoices.newInvoice };
+}
 
-export default function NewInvoicePage() {
+export default async function NewInvoicePage() {
+  const { invoiceForm } = await getDictionary();
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="New invoice"
-        description="Stock is deducted when the invoice is marked as sent."
+        title={invoiceForm.title}
+        description={invoiceForm.description}
       />
       <Suspense fallback={<PageSkeleton />}>
         <NewInvoiceContent />

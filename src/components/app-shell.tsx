@@ -20,31 +20,42 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
+import { useI18n } from "@/lib/i18n/provider";
+import type { Dictionary } from "@/lib/i18n/dictionaries/en";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/invoices", label: "Invoices", icon: FileText },
-  { href: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
-  { href: "/products", label: "Products", icon: Package },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/suppliers", label: "Suppliers", icon: Truck },
-] as const;
+type NavKey = keyof Dictionary["nav"];
 
-const NAV_SECONDARY = [
-  { href: "/pilot", label: "Pilot AI", icon: Sparkles, highlight: true },
-  { href: "/usage", label: "AI Usage", icon: Gauge },
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/faq", label: "Help & FAQ", icon: CircleHelp },
-] as const;
+const NAV: { href: string; key: NavKey; icon: typeof Package }[] = [
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/invoices", key: "invoices", icon: FileText },
+  { href: "/purchase-orders", key: "purchaseOrders", icon: ShoppingCart },
+  { href: "/products", key: "products", icon: Package },
+  { href: "/customers", key: "customers", icon: Users },
+  { href: "/suppliers", key: "suppliers", icon: Truck },
+];
+
+const NAV_SECONDARY: {
+  href: string;
+  key: NavKey;
+  icon: typeof Package;
+  highlight?: boolean;
+}[] = [
+  { href: "/pilot", key: "pilot", icon: Sparkles, highlight: true },
+  { href: "/usage", key: "usage", icon: Gauge },
+  { href: "/settings", key: "settings", icon: Settings },
+  { href: "/faq", key: "help", icon: CircleHelp },
+];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { dict } = useI18n();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
 
   const renderLink = (item: {
     href: string;
-    label: string;
+    key: NavKey;
     icon: typeof Package;
     highlight?: boolean;
   }) => (
@@ -61,7 +72,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       )}
     >
       <item.icon className="size-4" />
-      {item.label}
+      {dict.nav[item.key]}
     </Link>
   );
 
@@ -100,6 +111,7 @@ export function AppShell({
   userChip: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { dict } = useI18n();
 
   return (
     <div className="flex min-h-screen w-full">
@@ -111,7 +123,10 @@ export function AppShell({
           <span className="text-base font-semibold tracking-tight">
             UangLite
           </span>
-          <ThemeToggle className="ml-auto" />
+          <span className="ml-auto flex items-center gap-1">
+            <LanguageToggle />
+            <ThemeToggle />
+          </span>
         </Link>
         <div className="flex-1 overflow-y-auto">
           <Nav />
@@ -124,7 +139,7 @@ export function AppShell({
           <button
             onClick={() => setMobileOpen(true)}
             className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-100"
-            aria-label="Open menu"
+            aria-label={dict.common.openMenu}
           >
             <Menu className="size-5" />
           </button>
@@ -135,6 +150,7 @@ export function AppShell({
             UangLite
           </span>
           <div className="ml-auto flex items-center gap-1">
+            <LanguageToggle />
             <ThemeToggle />
             {userChip}
           </div>
@@ -154,13 +170,16 @@ export function AppShell({
                   </span>
                   UangLite
                 </span>
-                <button
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100"
-                  aria-label="Close menu"
-                >
-                  <X className="size-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <LanguageToggle />
+                  <button
+                    onClick={() => setMobileOpen(false)}
+                    className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100"
+                    aria-label={dict.common.closeMenu}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
               </div>
               <Nav onNavigate={() => setMobileOpen(false)} />
             </aside>

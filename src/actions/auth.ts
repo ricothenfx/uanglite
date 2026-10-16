@@ -7,21 +7,24 @@ import { z } from "zod";
 import { dba } from "@/db";
 import { memberships, organizations, users } from "@/db/schema";
 import { clearSession, writeSession } from "@/lib/session";
+import { getDictionary } from "@/lib/i18n/server";
 import { slugify } from "@/lib/utils";
 import type { FormState } from "@/lib/form";
-
-const registerSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters."),
-  email: z.email("Enter a valid email address."),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-  orgName: z.string().min(2, "Company name must be at least 2 characters."),
-  currency: z.enum(["SGD", "IDR", "MYR", "USD"]),
-});
 
 export async function registerAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const dict = await getDictionary();
+  const { auth } = dict;
+  const registerSchema = z.object({
+    name: z.string().min(2, auth.nameMinLength),
+    email: z.email(auth.emailInvalid),
+    password: z.string().min(8, auth.passwordMinLength),
+    orgName: z.string().min(2, auth.orgNameMinLength),
+    currency: z.enum(["SGD", "IDR", "MYR", "USD"]),
+  });
+
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -34,7 +37,7 @@ export async function registerAction(
     .from(users)
     .where(eq(users.email, normalizedEmail));
   if (existing.length > 0) {
-    return { error: "This email is already registered. Try signing in." };
+    return { error: auth.emailRegistered };
   }
 
   const passwordHash = await hash(password, 10);
@@ -76,10 +79,12 @@ export async function loginAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const dict = await getDictionary();
+  const { auth } = dict;
   const parsed = z
     .object({
-      email: z.email("Enter a valid email address."),
-      password: z.string().min(1, "Password is required."),
+      email: z.email(auth.emailInvalid),
+      password: z.string().min(1, auth.passwordRequired),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -92,7 +97,7 @@ export async function loginAction(
     .where(eq(users.email, parsed.data.email.toLowerCase()))
     .limit(1);
   if (!user || !(await compare(parsed.data.password, user.passwordHash))) {
-    return { error: "Invalid email or password." };
+    return { error: auth.invalidCredentials };
   }
 
   const [membership] = await dba
@@ -101,7 +106,7 @@ export async function loginAction(
     .where(eq(memberships.userId, user.id))
     .limit(1);
   if (!membership) {
-    return { error: "No workspace found for this account." };
+    return { error: auth.noWorkspace };
   }
 
   await writeSession({

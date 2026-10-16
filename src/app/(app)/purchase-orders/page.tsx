@@ -10,19 +10,24 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listPurchaseOrders } from "@/lib/queries";
 import { fmtMoney } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata = { title: "Purchase Orders" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.purchaseOrders };
+}
 
-export default function PurchaseOrdersPage() {
+export default async function PurchaseOrdersPage() {
+  const { po } = await getDictionary();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Purchase Orders"
-        description="Restock lifecycle: draft → sent → received (stock in)."
+        title={po.title}
+        description={po.description}
         actions={
           <Link href="/purchase-orders/new">
             <Button size="sm">
-              <Plus /> New purchase order
+              <Plus /> {po.newPo}
             </Button>
           </Link>
         }
@@ -36,7 +41,11 @@ export default function PurchaseOrdersPage() {
 
 async function PoTable() {
   const auth = await requireAuth();
-  const rows = await listPurchaseOrders(auth.org.id);
+  const [rows, dict] = await Promise.all([
+    listPurchaseOrders(auth.org.id),
+    getDictionary(),
+  ]);
+  const { po } = dict;
 
   return (
     <Card>
@@ -44,56 +53,50 @@ async function PoTable() {
         <Table>
           <THead>
             <TR>
-              <TH>Number</TH>
-              <TH>Supplier</TH>
-              <TH>Ordered</TH>
+              <TH>{po.number}</TH>
+              <TH>{po.supplier}</TH>
+              <TH>{po.ordered}</TH>
               <TH>
                 <span className="flex items-center gap-1">
-                  Expected
-                  <InfoTip
-                    side="bottom"
-                    text="When the supplier is expected to deliver. Optional — leave it empty if the supplier did not commit to a date."
-                  />
+                  {po.expected}
+                  <InfoTip side="bottom" text={po.expectedInfo} />
                 </span>
               </TH>
-              <TH className="text-right">Subtotal</TH>
+              <TH className="text-right">{po.subtotal}</TH>
               <TH>
                 <span className="flex items-center gap-1">
-                  Status
-                  <InfoTip
-                    side="bottom"
-                    text="Draft → Sent → Received. Receiving a PO adds the ordered quantities to product stock automatically; the Pilot can create these as drafts for your approval."
-                  />
+                  {po.status}
+                  <InfoTip side="bottom" text={po.statusInfo} />
                 </span>
               </TH>
             </TR>
           </THead>
           <TBody>
-            {rows.map((po) => (
-              <TR key={po.id}>
+            {rows.map((row) => (
+              <TR key={row.id}>
                 <TD className="font-medium">
                   <Link
-                    href={`/purchase-orders/${po.id}`}
+                    href={`/purchase-orders/${row.id}`}
                     className="hover:text-emerald-700 hover:underline"
                   >
-                    {po.number}
+                    {row.number}
                   </Link>
                 </TD>
-                <TD>{po.supplierName}</TD>
-                <TD>{po.orderDate}</TD>
-                <TD>{po.expectedDate ?? "—"}</TD>
+                <TD>{row.supplierName}</TD>
+                <TD>{row.orderDate}</TD>
+                <TD>{row.expectedDate ?? "—"}</TD>
                 <TD className="text-right">
-                  {fmtMoney(po.subtotalCents, auth.org.currency)}
+                  {fmtMoney(row.subtotalCents, auth.org.currency)}
                 </TD>
                 <TD>
-                  <StatusBadge status={po.status} />
+                  <StatusBadge status={row.status} />
                 </TD>
               </TR>
             ))}
             {rows.length === 0 ? (
               <TR>
                 <TD colSpan={6} className="py-10 text-center text-zinc-500">
-                  No purchase orders yet. The Pilot AI can draft them for you.
+                  {po.noneYet}
                 </TD>
               </TR>
             ) : null}

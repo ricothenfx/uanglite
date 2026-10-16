@@ -6,8 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { listAgentDrafts } from "@/lib/queries";
 import { fmtDateTime } from "@/lib/utils";
+import { getDictionary, getDateLocale } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 
-export const metadata = { title: "AI Drafts" };
+export async function generateMetadata() {
+  const { drafts } = await getDictionary();
+  return { title: drafts.title };
+}
 
 type DraftPayload = {
   poNumber?: string;
@@ -20,12 +25,13 @@ type DraftPayload = {
   invoiceNumber?: string;
 };
 
-export default function DraftsPage() {
+export default async function DraftsPage() {
+  const { drafts } = await getDictionary();
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="AI Drafts"
-        description="Audit trail of every artifact the Pilot created. Write actions are always approved in the chat first."
+        title={drafts.title}
+        description={drafts.description}
       />
       <Suspense fallback={<PageSkeleton />}>
         <DraftsList />
@@ -36,14 +42,18 @@ export default function DraftsPage() {
 
 async function DraftsList() {
   const auth = await requireAuth();
-  const drafts = await listAgentDrafts(auth.org.id);
+  const [drafts, dict, dateLocale] = await Promise.all([
+    listAgentDrafts(auth.org.id),
+    getDictionary(),
+    getDateLocale(),
+  ]);
+  const d = dict.drafts;
 
   if (drafts.length === 0) {
     return (
       <Card>
         <CardContent className="py-10 text-center text-sm text-zinc-500">
-          No AI drafts yet. Ask the Pilot to restock a product or chase an
-          unpaid invoice.
+          {d.noneYet}
         </CardContent>
       </Card>
     );
@@ -58,10 +68,10 @@ async function DraftsList() {
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Badge variant={draft.type === "purchase_order" ? "info" : "warning"}>
-                  {draft.type === "purchase_order" ? "Purchase order" : "Payment reminder"}
+                  {draft.type === "purchase_order" ? d.purchaseOrder : d.paymentReminder}
                 </Badge>
                 <span className="text-xs text-zinc-400">
-                  {fmtDateTime(draft.createdAt)}
+                  {fmtDateTime(draft.createdAt, dateLocale)}
                 </span>
               </div>
               {draft.refId && draft.type === "purchase_order" ? (
@@ -69,7 +79,9 @@ async function DraftsList() {
                   href={`/purchase-orders/${draft.refId}`}
                   className="text-xs font-medium text-emerald-700 hover:underline"
                 >
-                  Open {payload.poNumber ?? "PO"}
+                  {interpolate(d.openNumber, {
+                    number: payload.poNumber ?? d.poFallback,
+                  })}
                 </Link>
               ) : null}
             </div>

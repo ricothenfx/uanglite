@@ -6,15 +6,20 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { getUsageData } from "@/lib/queries";
 import { fmtDateTime, fmtQty } from "@/lib/utils";
+import { getDictionary, getDateLocale } from "@/lib/i18n/server";
 
-export const metadata = { title: "AI Usage" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.usage };
+}
 
-export default function UsagePage() {
+export default async function UsagePage() {
+  const { usage } = await getDictionary();
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="AI Usage"
-        description="Token consumption and estimated cost of the Pilot, per tenant."
+        title={usage.title}
+        description={usage.description}
       />
       <Suspense fallback={<PageSkeleton />}>
         <UsageContent />
@@ -25,11 +30,14 @@ export default function UsagePage() {
 
 async function UsageContent() {
   const auth = await requireAuth();
+  const [dict, dateLocale] = await Promise.all([getDictionary(), getDateLocale()]);
+  const u = dict.usage;
+
   if (auth.role !== "owner") {
     return (
       <Card>
         <CardContent className="py-10 text-center text-sm text-zinc-500">
-          Only workspace owners can view AI usage and costs.
+          {u.ownersOnly}
         </CardContent>
       </Card>
     );
@@ -45,8 +53,8 @@ async function UsageContent() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="px-5 py-4">
           <p className="flex items-center gap-1 text-xs text-zinc-500">
-            Estimated spend (all time)
-            <InfoTip text="Estimated LLM cost for this tenant, computed from token counts and public per-model list prices at call time. It is an estimate for budgeting, not an invoice." />
+            {u.spend}
+            <InfoTip text={u.spendInfo} />
           </p>
           <p className="mt-1 text-2xl font-semibold">
             ${totalCostUsd.toFixed(4)}
@@ -54,15 +62,15 @@ async function UsageContent() {
         </Card>
         <Card className="px-5 py-4">
           <p className="flex items-center gap-1 text-xs text-zinc-500">
-            Agent requests
-            <InfoTip text="Number of LLM calls logged for this workspace. One Pilot question can trigger several calls when the agent chains multiple tool lookups." />
+            {u.requests}
+            <InfoTip text={u.requestsInfo} />
           </p>
           <p className="mt-1 text-2xl font-semibold">{fmtQty(totalCalls)}</p>
         </Card>
         <Card className="px-5 py-4">
           <p className="flex items-center gap-1 text-xs text-zinc-500">
-            Models used
-            <InfoTip text="How many distinct LLM models this tenant has used. Costs are tracked per model because pricing differs widely between them." />
+            {u.models}
+            <InfoTip text={u.modelsInfo} />
           </p>
           <p className="mt-1 text-2xl font-semibold">{data.byModel.length}</p>
         </Card>
@@ -70,21 +78,18 @@ async function UsageContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Cost by model</CardTitle>
+          <CardTitle>{u.costByModel}</CardTitle>
         </CardHeader>
         <CardContent className="px-0 pb-2">
           <Table>
             <THead>
               <TR>
-                <TH>Model</TH>
-                <TH className="text-right">Requests</TH>
+                <TH>{u.model}</TH>
+                <TH className="text-right">{u.requestsCol}</TH>
                 <TH className="text-right">
                   <span className="flex items-center justify-end gap-1">
-                    Est. cost
-                    <InfoTip
-                      side="bottom"
-                      text="Tokens used × the model's per-token price, summed per model. Stored as micro-US dollars when the call completes."
-                    />
+                    {u.estCost}
+                    <InfoTip side="bottom" text={u.estCostInfo} />
                   </span>
                 </TH>
               </TR>
@@ -102,7 +107,7 @@ async function UsageContent() {
               {data.byModel.length === 0 ? (
                 <TR>
                   <TD colSpan={3} className="py-8 text-center text-zinc-500">
-                    No AI usage recorded yet. Ask the Pilot something.
+                    {u.noUsage}
                   </TD>
                 </TR>
               ) : null}
@@ -113,31 +118,28 @@ async function UsageContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent calls</CardTitle>
+          <CardTitle>{u.recentCalls}</CardTitle>
         </CardHeader>
         <CardContent className="px-0 pb-2">
           <Table>
             <THead>
               <TR>
-                <TH>When</TH>
-                <TH>Model</TH>
-                <TH>Tools</TH>
+                <TH>{u.when}</TH>
+                <TH>{u.model}</TH>
+                <TH>{u.tools}</TH>
                 <TH className="text-right">
                   <span className="flex items-center justify-end gap-1">
-                    Tokens in/out
-                    <InfoTip
-                      side="bottom"
-                      text="Prompt tokens (your question + tool results fed to the model) versus completion tokens (the answer it produced). Both count toward cost."
-                    />
+                    {u.tokens}
+                    <InfoTip side="bottom" text={u.tokensInfo} />
                   </span>
                 </TH>
-                <TH className="text-right">Latency</TH>
+                <TH className="text-right">{u.latency}</TH>
               </TR>
             </THead>
             <TBody>
               {data.recent.map((log) => (
                 <TR key={log.id}>
-                  <TD>{fmtDateTime(log.createdAt)}</TD>
+                  <TD>{fmtDateTime(log.createdAt, dateLocale)}</TD>
                   <TD className="font-mono text-xs">{log.model}</TD>
                   <TD className="text-xs text-zinc-500">
                     {log.toolNames.length > 0 ? log.toolNames.join(", ") : "—"}
@@ -151,7 +153,7 @@ async function UsageContent() {
               {data.recent.length === 0 ? (
                 <TR>
                   <TD colSpan={5} className="py-8 text-center text-zinc-500">
-                    Nothing logged yet.
+                    {u.nothingLogged}
                   </TD>
                 </TR>
               ) : null}

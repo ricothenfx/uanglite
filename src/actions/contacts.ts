@@ -6,17 +6,18 @@ import { z } from "zod";
 import { assertUuid, withTenant } from "@/db";
 import { customers, salesInvoices, suppliers } from "@/db/schema";
 import { requireAuth } from "@/lib/auth";
+import { getDictionary } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 import type { FormState } from "@/lib/form";
 
-const contactSchema = z.object({
-  name: z.string().trim().min(1, "Name is required.").max(120),
-  email: z
-    .union([z.email("Enter a valid email address."), z.literal("")])
-    .optional(),
-  phone: z.string().trim().max(40).optional(),
-});
-
-function contactFields(formData: FormData) {
+function contactFields(formData: FormData, messages: { nameRequired: string; emailInvalid: string }) {
+  const contactSchema = z.object({
+    name: z.string().trim().min(1, messages.nameRequired).max(120),
+    email: z
+      .union([z.email(messages.emailInvalid), z.literal("")])
+      .optional(),
+    phone: z.string().trim().max(40).optional(),
+  });
   return contactSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email") || "",
@@ -29,7 +30,11 @@ export async function createCustomerAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
-  const parsed = contactFields(formData);
+  const dict = await getDictionary();
+  const parsed = contactFields(formData, {
+    nameRequired: dict.actions.nameRequired,
+    emailInvalid: dict.auth.emailInvalid,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await withTenant(auth.org.id, async (tx) => {
     await tx.insert(customers).values({
@@ -40,7 +45,7 @@ export async function createCustomerAction(
     });
   });
   revalidatePath("/customers");
-  return { ok: `Customer ${parsed.data.name} added.` };
+  return { ok: interpolate(dict.actions.customerAdded, { name: parsed.data.name }) };
 }
 
 export async function updateCustomerAction(
@@ -48,8 +53,12 @@ export async function updateCustomerAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
   const id = assertUuid(String(formData.get("id") ?? ""));
-  const parsed = contactFields(formData);
+  const parsed = contactFields(formData, {
+    nameRequired: dict.actions.nameRequired,
+    emailInvalid: dict.auth.emailInvalid,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const updated = await withTenant(auth.org.id, async (tx) => {
     const [row] = await tx
@@ -63,9 +72,9 @@ export async function updateCustomerAction(
       .returning({ id: customers.id });
     return row ?? null;
   });
-  if (!updated) return { error: "Customer not found." };
+  if (!updated) return { error: dict.actions.customerNotFound };
   revalidatePath("/customers");
-  return { ok: "Customer updated." };
+  return { ok: dict.actions.customerUpdated };
 }
 
 export async function deleteCustomerAction(formData: FormData): Promise<void> {
@@ -78,7 +87,9 @@ export async function deleteCustomerAction(formData: FormData): Promise<void> {
       .where(eq(salesInvoices.customerId, id))
       .limit(1);
     if (referenced) {
-      throw new Error("Customer has invoices and cannot be deleted.");
+      throw new Error(
+        await getDictionary().then((d) => d.actions.customerReferenced),
+      );
     }
     await tx.delete(customers).where(eq(customers.id, id));
   });
@@ -90,7 +101,11 @@ export async function createSupplierAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
-  const parsed = contactFields(formData);
+  const dict = await getDictionary();
+  const parsed = contactFields(formData, {
+    nameRequired: dict.actions.nameRequired,
+    emailInvalid: dict.auth.emailInvalid,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await withTenant(auth.org.id, async (tx) => {
     await tx.insert(suppliers).values({
@@ -101,7 +116,7 @@ export async function createSupplierAction(
     });
   });
   revalidatePath("/suppliers");
-  return { ok: `Supplier ${parsed.data.name} added.` };
+  return { ok: interpolate(dict.actions.supplierAdded, { name: parsed.data.name }) };
 }
 
 export async function updateSupplierAction(
@@ -109,8 +124,12 @@ export async function updateSupplierAction(
   formData: FormData,
 ): Promise<FormState> {
   const auth = await requireAuth();
+  const dict = await getDictionary();
   const id = assertUuid(String(formData.get("id") ?? ""));
-  const parsed = contactFields(formData);
+  const parsed = contactFields(formData, {
+    nameRequired: dict.actions.nameRequired,
+    emailInvalid: dict.auth.emailInvalid,
+  });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const updated = await withTenant(auth.org.id, async (tx) => {
     const [row] = await tx
@@ -124,9 +143,9 @@ export async function updateSupplierAction(
       .returning({ id: suppliers.id });
     return row ?? null;
   });
-  if (!updated) return { error: "Supplier not found." };
+  if (!updated) return { error: dict.actions.supplierNotFound };
   revalidatePath("/suppliers");
-  return { ok: "Supplier updated." };
+  return { ok: dict.actions.supplierUpdated };
 }
 
 export async function deleteSupplierAction(formData: FormData): Promise<void> {
@@ -137,7 +156,9 @@ export async function deleteSupplierAction(formData: FormData): Promise<void> {
       sql`select exists(select 1 from purchase_orders where supplier_id = ${id}) as used`,
     );
     if (used.used) {
-      throw new Error("Supplier has purchase orders and cannot be deleted.");
+      throw new Error(
+        await getDictionary().then((d) => d.actions.supplierReferenced),
+      );
     }
     await tx.delete(suppliers).where(eq(suppliers.id, id));
   });

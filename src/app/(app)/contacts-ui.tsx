@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { useI18n } from "@/lib/i18n/provider";
+import { interpolate } from "@/lib/i18n/translate";
 import type { FormState } from "@/lib/form";
 
 type Contact = {
@@ -54,39 +56,41 @@ function Feedback({ state }: { state: FormState }) {
 }
 
 export function NewContactButton({ kind }: { kind: ContactKind }) {
+  const { dict } = useI18n();
+  const c = dict.contacts;
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     actions[kind].create,
     {},
   );
-  const noun = kind === "customers" ? "customer" : "supplier";
+  const label = kind === "customers" ? c.newCustomer : c.newSupplier;
 
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Plus /> New {noun}
+        <Plus /> {label}
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`New ${noun}`}>
+      <Modal open={open} onClose={() => setOpen(false)} title={label}>
         <Feedback state={state} />
         <form action={formAction} className="space-y-3">
           <div>
-            <Label htmlFor="nc-name">Name</Label>
-            <Input id="nc-name" name="name" placeholder="Company or person" required />
+            <Label htmlFor="nc-name">{c.name}</Label>
+            <Input id="nc-name" name="name" placeholder={c.namePlaceholder} required />
           </div>
           <div>
-            <Label htmlFor="nc-email">Email</Label>
-            <Input id="nc-email" name="email" type="email" placeholder="billing@company.com" />
+            <Label htmlFor="nc-email">{c.email}</Label>
+            <Input id="nc-email" name="email" type="email" placeholder={c.emailPlaceholder} />
           </div>
           <div>
-            <Label htmlFor="nc-phone">Phone</Label>
-            <Input id="nc-phone" name="phone" placeholder="+65 …" />
+            <Label htmlFor="nc-phone">{c.phone}</Label>
+            <Input id="nc-phone" name="phone" placeholder={c.phonePlaceholder} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
+              {dict.common.cancel}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? "Saving…" : "Save"}
+              {pending ? dict.common.saving : dict.common.save}
             </Button>
           </div>
         </form>
@@ -102,6 +106,8 @@ export function EditContactButton({
   kind: ContactKind;
   contact: Contact;
 }) {
+  const { dict } = useI18n();
+  const c = dict.contacts;
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     actions[kind].update,
@@ -113,32 +119,36 @@ export function EditContactButton({
       <button
         onClick={() => setOpen(true)}
         className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-        aria-label={`Edit ${contact.name}`}
+        aria-label={interpolate(c.editName, { name: contact.name })}
       >
         <Pencil className="size-3.5" />
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Edit ${contact.name}`}>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={interpolate(c.editName, { name: contact.name })}
+      >
         <Feedback state={state} />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="id" value={contact.id} />
           <div>
-            <Label htmlFor={`ec-name-${contact.id}`}>Name</Label>
+            <Label htmlFor={`ec-name-${contact.id}`}>{c.name}</Label>
             <Input id={`ec-name-${contact.id}`} name="name" defaultValue={contact.name} required />
           </div>
           <div>
-            <Label htmlFor={`ec-email-${contact.id}`}>Email</Label>
+            <Label htmlFor={`ec-email-${contact.id}`}>{c.email}</Label>
             <Input id={`ec-email-${contact.id}`} name="email" type="email" defaultValue={contact.email ?? ""} />
           </div>
           <div>
-            <Label htmlFor={`ec-phone-${contact.id}`}>Phone</Label>
+            <Label htmlFor={`ec-phone-${contact.id}`}>{c.phone}</Label>
             <Input id={`ec-phone-${contact.id}`} name="phone" defaultValue={contact.phone ?? ""} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
+              {dict.common.cancel}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? "Saving…" : "Save"}
+              {pending ? dict.common.saving : dict.common.save}
             </Button>
           </div>
         </form>
@@ -156,13 +166,15 @@ export function DeleteContactButton({
   id: string;
   name: string;
 }) {
+  const { dict } = useI18n();
+  const c = dict.contacts;
   const [pending, startTransition] = useTransition();
 
   return (
     <button
       disabled={pending}
       onClick={() => {
-        if (window.confirm(`Delete ${name}?`)) {
+        if (window.confirm(interpolate(c.deleteConfirm, { name }))) {
           const fd = new FormData();
           fd.set("id", id);
           startTransition(async () => {
@@ -171,7 +183,7 @@ export function DeleteContactButton({
         }
       }}
       className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600"
-      aria-label={`Delete ${name}`}
+      aria-label={interpolate(c.delete, { name })}
     >
       <Trash2 className="size-3.5" />
     </button>

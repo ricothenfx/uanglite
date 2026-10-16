@@ -5,9 +5,12 @@ import Link from "next/link";
 import { registerAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/field";
+import { useI18n } from "@/lib/i18n/provider";
 import type { FormState } from "@/lib/form";
 
 export function RegisterForm() {
+  const { dict } = useI18n();
+  const { auth } = dict;
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     registerAction,
     {},
@@ -16,33 +19,33 @@ export function RegisterForm() {
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <Label htmlFor="orgName">Company name</Label>
-        <Input id="orgName" name="orgName" placeholder="Acme Trading Pte Ltd" required />
+        <Label htmlFor="orgName">{auth.companyName}</Label>
+        <Input id="orgName" name="orgName" placeholder={auth.companyPlaceholder} required />
       </div>
       <div>
-        <Label htmlFor="currency">Currency</Label>
+        <Label htmlFor="currency">{auth.currency}</Label>
         <Select id="currency" name="currency" defaultValue="SGD">
-          <option value="SGD">SGD — Singapore Dollar</option>
-          <option value="IDR">IDR — Indonesian Rupiah</option>
-          <option value="MYR">MYR — Malaysian Ringgit</option>
-          <option value="USD">USD — US Dollar</option>
+          <option value="SGD">{auth.currencySgd}</option>
+          <option value="IDR">{auth.currencyIdr}</option>
+          <option value="MYR">{auth.currencyMyr}</option>
+          <option value="USD">{auth.currencyUsd}</option>
         </Select>
       </div>
       <div>
-        <Label htmlFor="name">Your name</Label>
-        <Input id="name" name="name" placeholder="Jane Tan" required />
+        <Label htmlFor="name">{auth.yourName}</Label>
+        <Input id="name" name="name" placeholder={auth.namePlaceholder} required />
       </div>
       <div>
-        <Label htmlFor="email">Work email</Label>
-        <Input id="email" name="email" type="email" placeholder="you@company.com" required />
+        <Label htmlFor="email">{auth.workEmail}</Label>
+        <Input id="email" name="email" type="email" placeholder={auth.emailPlaceholder} required />
       </div>
       <div>
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{auth.password}</Label>
         <Input
           id="password"
           name="password"
           type="password"
-          placeholder="At least 8 characters"
+          placeholder={auth.passwordHint}
           minLength={8}
           required
         />
@@ -53,12 +56,12 @@ export function RegisterForm() {
         </p>
       ) : null}
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Creating workspace…" : "Create workspace"}
+        {pending ? auth.registering : auth.register}
       </Button>
       <p className="text-center text-xs text-zinc-500">
-        Already registered?{" "}
+        {auth.alreadyRegistered}{" "}
         <Link href="/login" className="font-medium text-emerald-700 hover:underline">
-          Sign in
+          {auth.signIn}
         </Link>
       </p>
     </form>

@@ -6,6 +6,8 @@ import { createInvoiceAction } from "@/actions/invoices";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { fmtMoney } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/provider";
+import { interpolate } from "@/lib/i18n/translate";
 import type { FormState } from "@/lib/form";
 
 type ProductOption = {
@@ -40,6 +42,8 @@ export function InvoiceForm({
   todayIso: string;
   defaultDueIso: string;
 }) {
+  const { dict } = useI18n();
+  const f = dict.invoiceForm;
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     createInvoiceAction,
     {},
@@ -63,8 +67,7 @@ export function InvoiceForm({
   if (products.length === 0 || customers.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center text-sm text-zinc-500">
-        You need at least one product and one customer before creating an
-        invoice.
+        {f.needProductAndCustomer}
       </p>
     );
   }
@@ -85,7 +88,7 @@ export function InvoiceForm({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label htmlFor="customerId">Customer</Label>
+          <Label htmlFor="customerId">{f.customer}</Label>
           <Select id="customerId" name="customerId" required>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -95,11 +98,11 @@ export function InvoiceForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="issueDate">Issue date</Label>
+          <Label htmlFor="issueDate">{f.issueDate}</Label>
           <Input id="issueDate" name="issueDate" type="date" defaultValue={todayIso} required />
         </div>
         <div>
-          <Label htmlFor="dueDate">Due date</Label>
+          <Label htmlFor="dueDate">{f.dueDate}</Label>
           <Input id="dueDate" name="dueDate" type="date" defaultValue={defaultDueIso} required />
         </div>
       </div>
@@ -108,10 +111,10 @@ export function InvoiceForm({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-zinc-500">
-              <th className="px-4 py-2.5 font-medium">Product</th>
-              <th className="px-4 py-2.5 font-medium w-24">Qty</th>
-              <th className="px-4 py-2.5 font-medium w-36">Unit price</th>
-              <th className="px-4 py-2.5 font-medium text-right w-32">Line total</th>
+              <th className="px-4 py-2.5 font-medium">{f.product}</th>
+              <th className="px-4 py-2.5 font-medium w-24">{f.qty}</th>
+              <th className="px-4 py-2.5 font-medium w-36">{f.unitPrice}</th>
+              <th className="px-4 py-2.5 font-medium text-right w-32">{f.lineTotal}</th>
               <th className="w-12" />
             </tr>
           </thead>
@@ -128,7 +131,7 @@ export function InvoiceForm({
                         unitPriceCents: product?.priceCents ?? line.unitPriceCents,
                       });
                     }}
-                    aria-label="Product"
+                    aria-label={f.product}
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -145,7 +148,7 @@ export function InvoiceForm({
                     onChange={(e) =>
                       updateLine(line.key, { qty: Math.max(1, Number(e.target.value) || 1) })
                     }
-                    aria-label="Quantity"
+                    aria-label={f.qty}
                   />
                 </td>
                 <td className="px-4 py-2">
@@ -162,7 +165,7 @@ export function InvoiceForm({
                         ),
                       })
                     }
-                    aria-label="Unit price"
+                    aria-label={f.unitPrice}
                   />
                 </td>
                 <td className="px-4 py-2 text-right font-medium">
@@ -175,7 +178,7 @@ export function InvoiceForm({
                       setLines((ls) => ls.filter((l) => l.key !== line.key))
                     }
                     className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600"
-                    aria-label="Remove line"
+                    aria-label={f.removeLine}
                     disabled={lines.length === 1}
                   >
                     <Trash2 className="size-3.5" />
@@ -192,27 +195,27 @@ export function InvoiceForm({
             size="sm"
             onClick={() => setLines((ls) => [...ls, newLine(products)])}
           >
-            <Plus /> Add line
+            <Plus /> {f.addLine}
           </Button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="w-full max-w-xs space-y-2">
-          <Label htmlFor="notes">Notes</Label>
-          <Textarea id="notes" name="notes" placeholder="Payment terms, PO reference…" />
+          <Label htmlFor="notes">{f.notes}</Label>
+          <Textarea id="notes" name="notes" placeholder={f.notesPlaceholder} />
         </div>
         <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
           <div className="flex justify-between text-zinc-500">
-            <span>Subtotal</span>
+            <span>{f.subtotal}</span>
             <span>{fmtMoney(totals.subtotal, currency)}</span>
           </div>
           <div className="flex justify-between text-zinc-500">
-            <span>Tax ({(taxBps / 100).toFixed(1)}%)</span>
+            <span>{interpolate(f.tax, { percent: (taxBps / 100).toFixed(1) })}</span>
             <span>{fmtMoney(totals.tax, currency)}</span>
           </div>
           <div className="flex justify-between border-t border-zinc-200 pt-1.5 text-base font-semibold">
-            <span>Total</span>
+            <span>{f.total}</span>
             <span>{fmtMoney(totals.total, currency)}</span>
           </div>
         </div>
@@ -226,7 +229,7 @@ export function InvoiceForm({
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={pending || lines.length === 0}>
-          {pending ? "Creating…" : "Create draft invoice"}
+          {pending ? f.creating : f.createDraft}
         </Button>
       </div>
     </form>

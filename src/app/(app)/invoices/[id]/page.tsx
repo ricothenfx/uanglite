@@ -12,14 +12,13 @@ import { requireAuth } from "@/lib/auth";
 import { INVOICE_TRANSITIONS } from "@/lib/business";
 import { getInvoiceDetail } from "@/lib/queries";
 import { fmtDate, fmtMoney } from "@/lib/utils";
+import { getDictionary, getDateLocale } from "@/lib/i18n/server";
+import { interpolate } from "@/lib/i18n/translate";
 
-export const metadata = { title: "Invoice" };
-
-const ACTION_LABELS: Record<string, string> = {
-  sent: "Mark as sent",
-  paid: "Mark as paid",
-  void: "Void invoice",
-};
+export async function generateMetadata() {
+  const { invoiceDetail } = await getDictionary();
+  return { title: invoiceDetail.title };
+}
 
 export default async function InvoiceDetailPage({
   params,
@@ -41,22 +40,32 @@ async function InvoiceDetail({
   const { id } = await params;
   const invoiceId = id;
   const auth = await requireAuth();
-  const invoice = await getInvoiceDetail(auth.org.id, invoiceId);
+  const [invoice, dict, dateLocale] = await Promise.all([
+    getInvoiceDetail(auth.org.id, invoiceId),
+    getDictionary(),
+    getDateLocale(),
+  ]);
   if (!invoice) notFound();
+  const d = dict.invoiceDetail;
 
   const currency = auth.org.currency;
   const nextStatuses = INVOICE_TRANSITIONS[invoice.status];
+  const actionLabels: Record<string, string> = {
+    sent: d.markSent,
+    paid: d.markPaid,
+    void: d.void,
+  };
 
   return (
     <>
       <PageHeader
         title={invoice.number}
-        description={`${invoice.customerName} · issued ${fmtDate(invoice.issueDate)} · due ${fmtDate(invoice.dueDate)}`}
+        description={`${invoice.customerName} · ${interpolate(d.issuedOn, { date: fmtDate(invoice.issueDate, dateLocale) })} · ${interpolate(d.dueOn, { date: fmtDate(invoice.dueDate, dateLocale) })}`}
         actions={
           <>
             <Link href="/invoices">
               <Button variant="ghost" size="sm">
-                <ArrowLeft /> All invoices
+                <ArrowLeft /> {d.allInvoices}
               </Button>
             </Link>
             <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer">
@@ -73,7 +82,7 @@ async function InvoiceDetail({
                   size="sm"
                   variant={status === "void" ? "outline" : "default"}
                 >
-                  {ACTION_LABELS[status] ?? status}
+                  {actionLabels[status] ?? status}
                 </Button>
               </form>
             ))}
@@ -84,17 +93,17 @@ async function InvoiceDetail({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Line items</CardTitle>
+            <CardTitle>{d.lineItems}</CardTitle>
             <StatusBadge status={invoice.status} overdue={invoice.status === "sent" && invoice.dueDate < todayIso()} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             <Table>
               <THead>
                 <TR>
-                  <TH>Description</TH>
-                  <TH className="text-right">Qty</TH>
-                  <TH className="text-right">Unit price</TH>
-                  <TH className="text-right">Total</TH>
+                  <TH>{d.description}</TH>
+                  <TH className="text-right">{d.qty}</TH>
+                  <TH className="text-right">{d.unitPrice}</TH>
+                  <TH className="text-right">{d.total}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -119,25 +128,25 @@ async function InvoiceDetail({
 
         <Card>
           <CardHeader>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle>{d.summary}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5 text-sm">
             <div className="flex justify-between text-zinc-500">
-              <span>Subtotal</span>
+              <span>{d.subtotal}</span>
               <span>{fmtMoney(invoice.subtotalCents, currency)}</span>
             </div>
             <div className="flex justify-between text-zinc-500">
-              <span>Tax ({(invoice.taxBps / 100).toFixed(1)}%)</span>
+              <span>{interpolate(d.tax, { percent: (invoice.taxBps / 100).toFixed(1) })}</span>
               <span>
                 {fmtMoney(invoice.totalCents - invoice.subtotalCents, currency)}
               </span>
             </div>
             <div className="flex justify-between border-t border-zinc-200 pt-2 text-base font-semibold">
-              <span>Total</span>
+              <span>{d.total}</span>
               <span>{fmtMoney(invoice.totalCents, currency)}</span>
             </div>
             <div className="pt-3 text-xs text-zinc-500">
-              <p>Billed to: {invoice.customerName}</p>
+              <p>{interpolate(d.billedTo, { name: invoice.customerName })}</p>
               {invoice.customerEmail ? <p>{invoice.customerEmail}</p> : null}
               {invoice.notes ? (
                 <p className="mt-2 rounded-lg bg-zinc-50 p-2 text-zinc-600">

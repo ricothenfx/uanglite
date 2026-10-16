@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { useI18n } from "@/lib/i18n/provider";
+import { interpolate } from "@/lib/i18n/translate";
 import type { FormState } from "@/lib/form";
 
 type ProductOption = {
@@ -41,6 +43,8 @@ function Feedback({ state }: { state: FormState }) {
 }
 
 export function NewProductButton() {
+  const { dict } = useI18n();
+  const p = dict.products;
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     createProductAction,
@@ -55,53 +59,53 @@ export function NewProductButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)} size="sm">
-        <Plus /> New product
+        <Plus /> {p.newProduct}
       </Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="New product"
+        title={p.newProduct}
       >
         <Feedback state={state} />
         <form action={formAction} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="np-sku">SKU</Label>
+              <Label htmlFor="np-sku">{p.sku}</Label>
               <Input id="np-sku" name="sku" placeholder="COF-ESP-250" required />
             </div>
             <div>
-              <Label htmlFor="np-category">Category</Label>
+              <Label htmlFor="np-category">{p.category}</Label>
               <Input id="np-category" name="category" placeholder="beans" />
             </div>
           </div>
           <div>
-            <Label htmlFor="np-name">Name</Label>
+            <Label htmlFor="np-name">{p.name}</Label>
             <Input id="np-name" name="name" placeholder="Espresso Blend 250g" required />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label htmlFor="np-price">Price</Label>
+              <Label htmlFor="np-price">{p.price}</Label>
               <Input id="np-price" name="price" type="number" step="0.01" min="0" placeholder="18.00" required />
             </div>
             <div>
-              <Label htmlFor="np-cost">Cost</Label>
+              <Label htmlFor="np-cost">{p.cost}</Label>
               <Input id="np-cost" name="cost" type="number" step="0.01" min="0" placeholder="10.20" />
             </div>
             <div>
-              <Label htmlFor="np-min">Min stock</Label>
+              <Label htmlFor="np-min">{p.minStock}</Label>
               <Input id="np-min" name="minStock" type="number" min="0" defaultValue={0} />
             </div>
           </div>
           <div>
-            <Label htmlFor="np-opening">Opening stock</Label>
+            <Label htmlFor="np-opening">{p.openingStock}</Label>
             <Input id="np-opening" name="openingQty" type="number" min="0" defaultValue={0} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
+              {dict.common.cancel}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? "Saving…" : "Create product"}
+              {pending ? dict.common.saving : p.create}
             </Button>
           </div>
         </form>
@@ -111,6 +115,8 @@ export function NewProductButton() {
 }
 
 export function EditProductButton({ product }: { product: ProductOption }) {
+  const { dict } = useI18n();
+  const p = dict.products;
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     updateProductAction,
@@ -127,31 +133,35 @@ export function EditProductButton({ product }: { product: ProductOption }) {
       <button
         onClick={() => setOpen(true)}
         className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-        aria-label={`Edit ${product.sku}`}
+        aria-label={interpolate(p.editSku, { sku: product.sku })}
       >
         <Pencil className="size-3.5" />
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Edit ${product.sku}`}>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={interpolate(p.editSku, { sku: product.sku })}
+      >
         <Feedback state={state} />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="id" value={product.id} />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor={`ep-sku-${product.id}`}>SKU</Label>
+              <Label htmlFor={`ep-sku-${product.id}`}>{p.sku}</Label>
               <Input id={`ep-sku-${product.id}`} name="sku" defaultValue={product.sku} required />
             </div>
             <div>
-              <Label htmlFor={`ep-cat-${product.id}`}>Category</Label>
+              <Label htmlFor={`ep-cat-${product.id}`}>{p.category}</Label>
               <Input id={`ep-cat-${product.id}`} name="category" defaultValue={product.category} />
             </div>
           </div>
           <div>
-            <Label htmlFor={`ep-name-${product.id}`}>Name</Label>
+            <Label htmlFor={`ep-name-${product.id}`}>{p.name}</Label>
             <Input id={`ep-name-${product.id}`} name="name" defaultValue={product.name} required />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label htmlFor={`ep-price-${product.id}`}>Price</Label>
+              <Label htmlFor={`ep-price-${product.id}`}>{p.price}</Label>
               <Input
                 id={`ep-price-${product.id}`}
                 name="price"
@@ -162,7 +172,7 @@ export function EditProductButton({ product }: { product: ProductOption }) {
               />
             </div>
             <div>
-              <Label htmlFor={`ep-cost-${product.id}`}>Cost</Label>
+              <Label htmlFor={`ep-cost-${product.id}`}>{p.cost}</Label>
               <Input
                 id={`ep-cost-${product.id}`}
                 name="cost"
@@ -173,7 +183,7 @@ export function EditProductButton({ product }: { product: ProductOption }) {
               />
             </div>
             <div>
-              <Label htmlFor={`ep-min-${product.id}`}>Min stock</Label>
+              <Label htmlFor={`ep-min-${product.id}`}>{p.minStock}</Label>
               <Input
                 id={`ep-min-${product.id}`}
                 name="minStock"
@@ -185,10 +195,10 @@ export function EditProductButton({ product }: { product: ProductOption }) {
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
+              {dict.common.cancel}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? "Saving…" : "Save changes"}
+              {pending ? dict.common.saving : p.saveChanges}
             </Button>
           </div>
         </form>
@@ -198,6 +208,8 @@ export function EditProductButton({ product }: { product: ProductOption }) {
 }
 
 export function AdjustStockButton({ productId, sku }: { productId: string; sku: string }) {
+  const { dict } = useI18n();
+  const p = dict.products;
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     adjustStockAction,
@@ -209,34 +221,38 @@ export function AdjustStockButton({ productId, sku }: { productId: string; sku: 
       <button
         onClick={() => setOpen(true)}
         className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-        aria-label={`Adjust stock for ${sku}`}
+        aria-label={interpolate(p.adjustStockFor, { sku })}
       >
         <ScanSearch className="size-3.5" />
       </button>
-      <Modal open={open} onClose={() => setOpen(false)} title={`Adjust stock — ${sku}`}>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={interpolate(p.adjustStockSku, { sku })}
+      >
         <Feedback state={state} />
         <form action={formAction} className="space-y-3">
           <input type="hidden" name="id" value={productId} />
           <div>
-            <Label htmlFor={`as-delta-${productId}`}>Quantity change</Label>
+            <Label htmlFor={`as-delta-${productId}`}>{p.quantityChange}</Label>
             <Input
               id={`as-delta-${productId}`}
               name="delta"
               type="number"
-              placeholder="-5 or +20"
+              placeholder={p.quantityPlaceholder}
               required
             />
           </div>
           <div>
-            <Label htmlFor={`as-note-${productId}`}>Note</Label>
-            <Textarea id={`as-note-${productId}`} name="note" placeholder="Damaged goods, stock count correction…" />
+            <Label htmlFor={`as-note-${productId}`}>{p.note}</Label>
+            <Textarea id={`as-note-${productId}`} name="note" placeholder={p.notePlaceholder} />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Close
+              {dict.common.close}
             </Button>
             <Button type="submit" size="sm" disabled={pending}>
-              {pending ? "Applying…" : "Apply adjustment"}
+              {pending ? p.applying : p.applyAdjustment}
             </Button>
           </div>
         </form>

@@ -25,19 +25,22 @@ export function fmtCompactMoney(cents: number, currency = "SGD"): string {
   }).format(value);
 }
 
-export function fmtDate(value: string | Date | null | undefined): string {
+export function fmtDate(
+  value: string | Date | null | undefined,
+  locale = "en-SG",
+): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value + "T00:00:00") : value;
-  return new Intl.DateTimeFormat("en-SG", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
   }).format(d);
 }
 
-export function fmtDateTime(value: string | Date): string {
+export function fmtDateTime(value: string | Date, locale = "en-SG"): string {
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("en-SG", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",

@@ -4,20 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listCustomers } from "@/lib/queries";
+import { getDictionary } from "@/lib/i18n/server";
 import {
   DeleteContactButton,
   EditContactButton,
   NewContactButton,
 } from "../contacts-ui";
 
-export const metadata = { title: "Customers" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.customers };
+}
 
-export default function CustomersPage() {
+export default async function CustomersPage() {
+  const { contacts } = await getDictionary();
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="Customers"
-        description="People and companies you invoice."
+        title={contacts.customersTitle}
+        description={contacts.customersDescription}
         actions={<NewContactButton kind="customers" />}
       />
       <Suspense fallback={<PageSkeleton />}>
@@ -29,7 +34,11 @@ export default function CustomersPage() {
 
 async function CustomersTable() {
   const auth = await requireAuth();
-  const rows = await listCustomers(auth.org.id);
+  const [rows, dict] = await Promise.all([
+    listCustomers(auth.org.id),
+    getDictionary(),
+  ]);
+  const c = dict.contacts;
 
   return (
     <Card>
@@ -37,22 +46,22 @@ async function CustomersTable() {
         <Table>
           <THead>
             <TR>
-              <TH>Name</TH>
-              <TH>Email</TH>
-              <TH>Phone</TH>
+              <TH>{c.name}</TH>
+              <TH>{c.email}</TH>
+              <TH>{c.phone}</TH>
               <TH className="w-20" />
             </TR>
           </THead>
           <TBody>
-            {rows.map((c) => (
-              <TR key={c.id}>
-                <TD className="font-medium">{c.name}</TD>
-                <TD className="text-zinc-500">{c.email ?? "—"}</TD>
-                <TD className="text-zinc-500">{c.phone ?? "—"}</TD>
+            {rows.map((row) => (
+              <TR key={row.id}>
+                <TD className="font-medium">{row.name}</TD>
+                <TD className="text-zinc-500">{row.email ?? "—"}</TD>
+                <TD className="text-zinc-500">{row.phone ?? "—"}</TD>
                 <TD>
                   <div className="flex items-center justify-end gap-1">
-                    <EditContactButton kind="customers" contact={c} />
-                    <DeleteContactButton kind="customers" id={c.id} name={c.name} />
+                    <EditContactButton kind="customers" contact={row} />
+                    <DeleteContactButton kind="customers" id={row.id} name={row.name} />
                   </div>
                 </TD>
               </TR>
@@ -60,7 +69,7 @@ async function CustomersTable() {
             {rows.length === 0 ? (
               <TR>
                 <TD colSpan={4} className="py-10 text-center text-zinc-500">
-                  No customers yet.
+                  {c.noCustomers}
                 </TD>
               </TR>
             ) : null}

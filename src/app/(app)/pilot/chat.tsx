@@ -22,6 +22,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, fmtMoney } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/provider";
+import { interpolate } from "@/lib/i18n/translate";
+import type { Dictionary } from "@/lib/i18n/dictionaries/en";
 
 type ToolPartView = {
   type: string;
@@ -39,14 +42,16 @@ type ToolPartView = {
   };
 };
 
-const SUGGESTIONS = [
-  "How is the business doing this month?",
-  "Which products are running low on stock?",
-  "Restock all low-stock products from their supplier",
-  "Which invoices are overdue? Draft payment reminders for the worst one.",
-];
+const SUGGESTION_KEYS = [
+  "suggestion1",
+  "suggestion2",
+  "suggestion3",
+  "suggestion4",
+] as const;
 
 export function PilotChat({ currency }: { currency: string }) {
+  const { dict } = useI18n();
+  const c = dict.chat;
   const transport = useMemo(
     () => new DefaultChatTransport({ api: "/api/chat" }),
     [],
@@ -87,20 +92,17 @@ export function PilotChat({ currency }: { currency: string }) {
               <BadgeCheck className="size-6" />
             </span>
             <div>
-              <h2 className="text-base font-semibold">Your business pilot</h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Ask about stock, invoices and KPIs. For write actions the pilot
-                prepares drafts that you approve before anything happens.
-              </p>
+              <h2 className="text-base font-semibold">{c.heroTitle}</h2>
+              <p className="mt-1 text-sm text-zinc-500">{c.heroBody}</p>
             </div>
             <div className="grid gap-2">
-              {SUGGESTIONS.map((s) => (
+              {SUGGESTION_KEYS.map((key) => (
                 <button
-                  key={s}
-                  onClick={() => submit(s)}
+                  key={key}
+                  onClick={() => submit(c[key])}
                   className="rounded-lg border border-zinc-200 px-3 py-2 text-left text-xs text-zinc-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50/50"
                 >
-                  {s}
+                  {c[key]}
                 </button>
               ))}
             </div>
@@ -160,13 +162,13 @@ export function PilotChat({ currency }: { currency: string }) {
 
         {status === "submitted" ? (
           <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Loader2 className="size-3.5 animate-spin" /> Thinking…
+            <Loader2 className="size-3.5 animate-spin" /> {c.thinking}
           </div>
         ) : null}
 
         {error ? (
           <div className="max-w-[85%] rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-            <p className="font-medium">The pilot hit an error.</p>
+            <p className="font-medium">{c.errorTitle}</p>
             <p className="mt-0.5">{error.message}</p>
             <Button
               variant="outline"
@@ -174,7 +176,7 @@ export function PilotChat({ currency }: { currency: string }) {
               className="mt-2"
               onClick={() => regenerate()}
             >
-              Retry
+              {c.retry}
             </Button>
           </div>
         ) : null}
@@ -200,7 +202,7 @@ export function PilotChat({ currency }: { currency: string }) {
               }
             }}
             rows={1}
-            placeholder="Ask about stock, invoices, KPIs…"
+            placeholder={c.placeholder}
             className="max-h-32 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-zinc-400"
           />
           {busy ? (
@@ -213,10 +215,7 @@ export function PilotChat({ currency }: { currency: string }) {
             </Button>
           )}
         </div>
-        <p className="mt-1.5 px-1 text-[11px] text-zinc-400">
-          The pilot can only draft POs and reminder emails — you approve every
-          write action. AI usage and cost are tracked per tenant.
-        </p>
+        <p className="mt-1.5 px-1 text-[11px] text-zinc-400">{c.footnote}</p>
       </form>
     </div>
   );
@@ -231,18 +230,20 @@ function ToolCard({
   currency: string;
   onApprove: (approved: boolean) => void;
 }) {
+  const { dict } = useI18n();
+  const c = dict.chat;
   const toolName = part.toolName ?? part.type.replace(/^tool-/, "");
-  const meta = TOOL_META[toolName] ?? {
-    icon: Table2,
-    label: toolName,
-  };
-  const Icon = meta.icon;
+  const meta = TOOL_META[toolName];
+  const Icon = meta?.icon ?? Table2;
+  const fallbackLabel = toolName;
 
   return (
     <div className="max-w-[85%] overflow-hidden rounded-xl border border-zinc-200">
       <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50/80 px-3 py-2">
         <Icon className="size-3.5 text-emerald-700" />
-        <span className="text-xs font-medium text-zinc-700">{meta.label}</span>
+        <span className="text-xs font-medium text-zinc-700">
+          {TOOL_LABELS[toolName] ? c[TOOL_LABELS[toolName]] : fallbackLabel}
+        </span>
         {part.state === "input-streaming" || part.state === "input-available" ? (
           <Loader2 className="ml-auto size-3.5 animate-spin text-zinc-400" />
         ) : null}
@@ -251,14 +252,14 @@ function ToolCard({
         ) : null}
         {part.state === "output-denied" ? (
           <Badge variant="danger" className="ml-auto">
-            denied
+            {c.deniedBadge}
           </Badge>
         ) : null}
       </div>
 
       <div className="px-3 py-2.5">
         {part.state === "input-streaming" ? (
-          <p className="text-xs text-zinc-400">Preparing request…</p>
+          <p className="text-xs text-zinc-400">{c.preparing}</p>
         ) : null}
 
         {part.state === "input-available" ? (
@@ -270,20 +271,19 @@ function ToolCard({
             <InputSummary name={toolName} input={part.input} />
             <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2">
               <p className="text-xs font-medium text-amber-800">
-                {part.approval?.requestReason ??
-                  "This write action needs your approval."}
+                {part.approval?.requestReason ?? c.approvalNeeded}
               </p>
               {!part.approval?.isAutomatic ? (
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={() => onApprove(true)}>
-                    Approve
+                    {c.approve}
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => onApprove(false)}
                   >
-                    Deny
+                    {c.deny}
                   </Button>
                 </div>
               ) : null}
@@ -293,20 +293,18 @@ function ToolCard({
 
         {part.state === "approval-responded" ? (
           <p className="text-xs text-zinc-500">
-            {part.approval?.approved ? "Approved — running…" : "Denied."}
+            {part.approval?.approved ? c.approved : c.denied}
           </p>
         ) : null}
 
         {part.state === "output-error" ? (
           <p className="text-xs text-red-600">
-            {part.errorText ?? "The tool failed."}
+            {part.errorText ?? c.toolFailed}
           </p>
         ) : null}
 
         {part.state === "output-denied" ? (
-          <p className="text-xs text-zinc-500">
-            You denied this action. Nothing was created.
-          </p>
+          <p className="text-xs text-zinc-500">{c.deniedNote}</p>
         ) : null}
 
         {part.state === "output-available" ? (
@@ -317,13 +315,22 @@ function ToolCard({
   );
 }
 
-const TOOL_META: Record<string, { icon: typeof Package; label: string }> = {
-  query_stock: { icon: Package, label: "Stock lookup" },
-  query_invoices: { icon: ReceiptText, label: "Invoice lookup" },
-  business_summary: { icon: BarChart3, label: "Business summary" },
-  detect_anomalies: { icon: FileWarning, label: "Anomaly scan" },
-  create_purchase_order_draft: { icon: ShoppingCart, label: "Draft purchase order" },
-  draft_payment_reminder: { icon: AlertTriangle, label: "Payment reminder draft" },
+const TOOL_META: Record<string, { icon: typeof Package }> = {
+  query_stock: { icon: Package },
+  query_invoices: { icon: ReceiptText },
+  business_summary: { icon: BarChart3 },
+  detect_anomalies: { icon: FileWarning },
+  create_purchase_order_draft: { icon: ShoppingCart },
+  draft_payment_reminder: { icon: AlertTriangle },
+};
+
+const TOOL_LABELS: Record<string, keyof Dictionary["chat"]> = {
+  query_stock: "toolStock",
+  query_invoices: "toolInvoices",
+  business_summary: "toolSummary",
+  detect_anomalies: "toolAnomalies",
+  create_purchase_order_draft: "toolPoDraft",
+  draft_payment_reminder: "toolReminderDraft",
 };
 
 function InputSummary({
@@ -333,12 +340,16 @@ function InputSummary({
   name: string;
   input?: Record<string, unknown>;
 }) {
+  const { dict } = useI18n();
+  const c = dict.chat;
   if (!input) return null;
   if (name === "create_purchase_order_draft" && Array.isArray(input.items)) {
     return (
       <div className="text-xs text-zinc-600">
         <p>
-          Supplier: <span className="font-medium">{String(input.supplierName ?? "—")}</span>
+          {interpolate(c.supplierLabel, {
+            name: String(input.supplierName ?? "—"),
+          })}
         </p>
         <ul className="mt-1 space-y-0.5">
           {(input.items as { sku?: string; quantity?: number }[]).map((item, i) => (
@@ -353,7 +364,9 @@ function InputSummary({
   if (name === "draft_payment_reminder" && input.invoiceNumber) {
     return (
       <p className="text-xs text-zinc-600">
-        Invoice <span className="font-mono font-medium">{String(input.invoiceNumber)}</span>
+        {interpolate(c.invoiceLabel, {
+          number: String(input.invoiceNumber),
+        })}
       </p>
     );
   }
@@ -439,6 +452,9 @@ function OutputView({
   output: unknown;
   currency: string;
 }) {
+  const { dict } = useI18n();
+  const c = dict.chat;
+  const statusLabels = dict.status as Record<string, string>;
   if (output == null) return null;
 
   if (name === "query_stock") {
@@ -449,10 +465,10 @@ function OutputView({
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left text-zinc-400">
-              <th className="py-1 pr-3 font-medium">SKU</th>
-              <th className="py-1 pr-3 font-medium">Product</th>
-              <th className="py-1 pr-3 text-right font-medium">Stock</th>
-              <th className="py-1 text-right font-medium">Min</th>
+              <th className="py-1 pr-3 font-medium">{c.outSku}</th>
+              <th className="py-1 pr-3 font-medium">{c.outProduct}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.outStock}</th>
+              <th className="py-1 text-right font-medium">{c.outMin}</th>
             </tr>
           </thead>
           <tbody>
@@ -485,7 +501,9 @@ function OutputView({
     const data = output as InvoiceOutput;
     return (
       <div className="space-y-1">
-        <p className="text-xs text-zinc-500">{data.count ?? 0} matching invoices</p>
+        <p className="text-xs text-zinc-500">
+          {interpolate(c.matchingInvoices, { count: data.count ?? 0 })}
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <tbody>
@@ -495,9 +513,9 @@ function OutputView({
                   <td className="py-1 pr-3">{inv.customer}</td>
                   <td className="py-1 pr-3">
                     {inv.overdue ? (
-                      <Badge variant="danger">overdue</Badge>
+                      <Badge variant="danger">{c.overdueBadge}</Badge>
                     ) : (
-                      <Badge>{inv.status}</Badge>
+                      <Badge>{statusLabels[inv.status] ?? inv.status}</Badge>
                     )}
                   </td>
                   <td className="py-1 pr-3 text-zinc-400">{inv.dueDate}</td>
@@ -517,22 +535,22 @@ function OutputView({
     const data = output as SummaryOutput;
     return (
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <SummaryItem label="Revenue" value={fmtMoney(data.revenueCents ?? 0, currency)} />
+        <SummaryItem label={c.revenue} value={fmtMoney(data.revenueCents ?? 0, currency)} />
         <SummaryItem
-          label="Invoices issued"
+          label={c.invoicesIssued}
           value={String(data.invoicesIssued ?? 0)}
         />
         <SummaryItem
-          label="Outstanding"
+          label={c.outstanding}
           value={`${data.outstanding?.count ?? 0} · ${fmtMoney(data.outstanding?.cents ?? 0, currency)}`}
         />
         <SummaryItem
-          label="Overdue"
+          label={c.overdue}
           value={`${data.overdue?.count ?? 0} · ${fmtMoney(data.overdue?.cents ?? 0, currency)}`}
         />
         <div className="col-span-2">
           <p className="mb-1 font-medium text-zinc-600">
-            Low stock ({data.lowStock?.length ?? 0})
+            {interpolate(c.lowStockCount, { count: data.lowStock?.length ?? 0 })}
           </p>
           <ul className="space-y-0.5 text-zinc-500">
             {(data.lowStock ?? []).slice(0, 5).map((p) => (
@@ -549,7 +567,7 @@ function OutputView({
   if (name === "detect_anomalies") {
     const data = output as AnomalyOutput;
     if ((data.count ?? 0) === 0) {
-      return <p className="text-xs text-emerald-700">No anomalies found.</p>;
+      return <p className="text-xs text-emerald-700">{c.noAnomalies}</p>;
     }
     return (
       <ul className="space-y-1.5">
@@ -572,7 +590,9 @@ function OutputView({
         <div className="text-xs text-red-600">
           <p>{data.error}</p>
           {data.matches ? (
-            <p className="mt-1 text-zinc-500">Did you mean: {data.matches.join(", ")}?</p>
+            <p className="mt-1 text-zinc-500">
+              {interpolate(c.didYouMean, { list: data.matches.join(", ") })}
+            </p>
           ) : null}
         </div>
       );
@@ -580,7 +600,7 @@ function OutputView({
     return (
       <div className="text-xs">
         <p className="font-medium text-emerald-700">
-          Draft {data.poNumber} created for {data.supplier}.
+          {interpolate(c.poCreated, { number: data.poNumber ?? "", supplier: data.supplier ?? "" })}
         </p>
         <ul className="mt-1 space-y-0.5 text-zinc-600">
           {(data.lines ?? []).map((l) => (
@@ -590,14 +610,16 @@ function OutputView({
           ))}
         </ul>
         <p className="mt-1 font-semibold">
-          Subtotal: {fmtMoney(data.subtotalCents ?? 0, currency)}
+          {interpolate(c.subtotalLabel, {
+            amount: fmtMoney(data.subtotalCents ?? 0, currency),
+          })}
         </p>
         {data.poId ? (
           <a
             href={`/purchase-orders/${data.poId}`}
             className="mt-1.5 inline-block font-medium text-emerald-700 hover:underline"
           >
-            Open {data.poNumber} →
+            {interpolate(c.openNumber, { number: data.poNumber ?? "" })}
           </a>
         ) : null}
       </div>
@@ -612,7 +634,10 @@ function OutputView({
           <p>{data.error}</p>
           {data.invoiceStatus ? (
             <p className="mt-1 text-zinc-500">
-              Status: {data.invoiceStatus}, due {data.dueDate}
+              {interpolate(c.statusDue, {
+                status: statusLabels[data.invoiceStatus] ?? data.invoiceStatus,
+                date: data.dueDate ?? "",
+              })}
             </p>
           ) : null}
         </div>
@@ -621,7 +646,10 @@ function OutputView({
     return (
       <div className="text-xs">
         <p className="font-medium text-emerald-700">
-          Reminder draft for {data.invoiceNumber} ({data.customer}) stored.
+          {interpolate(c.reminderStored, {
+            number: data.invoiceNumber ?? "",
+            customer: data.customer ?? "",
+          })}
         </p>
         <div className="mt-1.5 rounded-lg bg-zinc-50 p-2.5">
           <p className="font-medium text-zinc-700">{data.subject}</p>
@@ -630,13 +658,13 @@ function OutputView({
           </p>
         </div>
         <p className="mt-1 text-zinc-400">
-          To: {data.to ?? "no email on file"} — nothing was sent.
+          {interpolate(c.toLabel, { email: data.to ?? c.noEmailOnFile })}
         </p>
         <a
           href="/drafts"
           className="mt-1 inline-block font-medium text-emerald-700 hover:underline"
         >
-          View all drafts →
+          {c.viewDrafts}
         </a>
       </div>
     );

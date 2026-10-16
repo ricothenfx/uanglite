@@ -7,17 +7,22 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listProducts } from "@/lib/queries";
 import { fmtMoney } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 import { AdjustStockButton, EditProductButton, NewProductButton } from "./product-dialogs";
 import { DeleteProductButton } from "./delete-button";
 
-export const metadata = { title: "Products" };
+export async function generateMetadata() {
+  const { nav } = await getDictionary();
+  return { title: nav.products };
+}
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const { products } = await getDictionary();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Products"
-        description="Catalog, pricing and stock levels."
+        title={products.title}
+        description={products.description}
         actions={<NewProductButton />}
       />
       <Suspense fallback={<PageSkeleton />}>
@@ -29,7 +34,11 @@ export default function ProductsPage() {
 
 async function ProductsTable() {
   const auth = await requireAuth();
-  const rows = await listProducts(auth.org.id);
+  const [rows, dict] = await Promise.all([
+    listProducts(auth.org.id),
+    getDictionary(),
+  ]);
+  const p = dict.products;
   const currency = auth.org.currency;
 
   return (
@@ -38,79 +47,67 @@ async function ProductsTable() {
         <Table>
           <THead>
             <TR>
-              <TH>SKU</TH>
-              <TH>Name</TH>
-              <TH>Category</TH>
+              <TH>{p.sku}</TH>
+              <TH>{p.name}</TH>
+              <TH>{p.category}</TH>
               <TH className="text-right">
                 <span className="flex items-center justify-end gap-1">
-                  Price
-                  <InfoTip
-                    side="bottom"
-                    text="What you charge customers on an invoice line."
-                  />
+                  {p.price}
+                  <InfoTip side="bottom" text={p.priceInfo} />
                 </span>
               </TH>
               <TH className="text-right">
                 <span className="flex items-center justify-end gap-1">
-                  Cost
-                  <InfoTip
-                    side="bottom"
-                    text="What the product costs you (landed cost from suppliers). Optional — used for restock POs; invoices work even when it is empty."
-                  />
+                  {p.cost}
+                  <InfoTip side="bottom" text={p.costInfo} />
                 </span>
               </TH>
               <TH className="text-right">
                 <span className="flex items-center justify-end gap-1">
-                  Stock
-                  <InfoTip
-                    side="bottom"
-                    text="Quantity on hand. Increases when a purchase order is received or you adjust stock manually; decreases when invoices are sent. Amber means at/below minimum, red means negative (oversold)."
-                  />
+                  {p.stock}
+                  <InfoTip side="bottom" text={p.stockInfo} />
                 </span>
               </TH>
               <TH className="text-right">
                 <span className="flex items-center gap-1 justify-end">
-                  Min
-                  <InfoTip
-                    side="bottom"
-                    text="Minimum stock level (reorder point). When Stock falls to this number the product appears in Low stock alerts and the Pilot will propose restocking it."
-                  />
+                  {p.min}
+                  <InfoTip side="bottom" text={p.minInfo} />
                 </span>
               </TH>
-              <TH>Status</TH>
+              <TH>{p.status}</TH>
               <TH className="w-28" />
             </TR>
           </THead>
           <TBody>
-            {rows.map((p) => {
-              const low = p.stockQty <= p.minStock;
+            {rows.map((row) => {
+              const low = row.stockQty <= row.minStock;
               return (
-                <TR key={p.id}>
-                  <TD className="font-mono text-xs">{p.sku}</TD>
-                  <TD className="font-medium">{p.name}</TD>
-                  <TD className="text-zinc-500">{p.category}</TD>
-                  <TD className="text-right">{fmtMoney(p.priceCents, currency)}</TD>
+                <TR key={row.id}>
+                  <TD className="font-mono text-xs">{row.sku}</TD>
+                  <TD className="font-medium">{row.name}</TD>
+                  <TD className="text-zinc-500">{row.category}</TD>
+                  <TD className="text-right">{fmtMoney(row.priceCents, currency)}</TD>
                   <TD className="text-right text-zinc-500">
-                    {fmtMoney(p.costCents, currency)}
+                    {fmtMoney(row.costCents, currency)}
                   </TD>
                   <TD
-                    className={`text-right font-semibold ${p.stockQty < 0 ? "text-red-600" : low ? "text-amber-600" : ""}`}
+                    className={`text-right font-semibold ${row.stockQty < 0 ? "text-red-600" : low ? "text-amber-600" : ""}`}
                   >
-                    {p.stockQty}
+                    {row.stockQty}
                   </TD>
-                  <TD className="text-right text-zinc-400">{p.minStock}</TD>
+                  <TD className="text-right text-zinc-400">{row.minStock}</TD>
                   <TD>
-                    {p.active ? (
-                      <Badge variant="success">Active</Badge>
+                    {row.active ? (
+                      <Badge variant="success">{p.active}</Badge>
                     ) : (
-                      <Badge>Archived</Badge>
+                      <Badge>{p.archived}</Badge>
                     )}
                   </TD>
                   <TD>
                     <div className="flex items-center justify-end gap-1">
-                      <AdjustStockButton productId={p.id} sku={p.sku} />
-                      <EditProductButton product={p} />
-                      <DeleteProductButton productId={p.id} sku={p.sku} />
+                      <AdjustStockButton productId={row.id} sku={row.sku} />
+                      <EditProductButton product={row} />
+                      <DeleteProductButton productId={row.id} sku={row.sku} />
                     </div>
                   </TD>
                 </TR>
@@ -119,7 +116,7 @@ async function ProductsTable() {
             {rows.length === 0 ? (
               <TR>
                 <TD colSpan={9} className="py-10 text-center text-zinc-500">
-                  No products yet. Create your first one to start invoicing.
+                  {p.noneYet}
                 </TD>
               </TR>
             ) : null}

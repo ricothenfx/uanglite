@@ -3,16 +3,21 @@ import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { requireAuth } from "@/lib/auth";
 import { listProducts, listSuppliers } from "@/lib/queries";
 import { todayIso } from "@/lib/utils";
+import { getDictionary } from "@/lib/i18n/server";
 import { PoForm } from "./po-form";
 
-export const metadata = { title: "New purchase order" };
+export async function generateMetadata() {
+  const { poForm } = await getDictionary();
+  return { title: poForm.title };
+}
 
-export default function NewPoPage() {
+export default async function NewPoPage() {
+  const { poForm } = await getDictionary();
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="New purchase order"
-        description="Stock is added when the PO is marked as received."
+        title={poForm.title}
+        description={poForm.description}
       />
       <Suspense fallback={<PageSkeleton />}>
         <NewPoContent />
