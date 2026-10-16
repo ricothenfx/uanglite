@@ -69,7 +69,14 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 
 export async function requireAuth(): Promise<AuthContext> {
   const auth = await getAuthContext();
-  if (!auth) redirect("/login");
+  if (!auth) {
+    // A stale session cookie (user or tenant no longer exists, e.g. after a
+    // demo reset) must not ping-pong: proxy optimistically redirects any
+    // authed-looking request away from /login, while requireAuth bounces the
+    // broken session back. The `stale` flag lets proxy render the login page.
+    const hasSessionCookie = Boolean((await getSession()).userId);
+    redirect(hasSessionCookie ? "/login?stale=1" : "/login");
+  }
   return auth;
 }
 

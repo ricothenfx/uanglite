@@ -27,7 +27,7 @@ export default async function proxy(req: NextRequest) {
     if (path !== "/") url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
-  if (authed && isPublic) {
+  if (authed && isPublic && req.nextUrl.searchParams.get("stale") !== "1") {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
   }
   return NextResponse.next();
