@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: uanglite
+      POSTGRES_PASSWORD: uanglite
+      POSTGRES_DB: uanglite
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uanglite"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    environment: &appenv
+      DATABASE_URL: postgres://uanglite_app:uanglite@db:5432/uanglite
+      ADMIN_DATABASE_URL: postgres://uanglite:uanglite@db:5432/uanglite
+      SESSION_PASSWORD: ${SESSION_PASSWORD:-change-me-please-32-characters-min!!}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      SEED_ON_START: ${SEED_ON_START:-true}
+    command: >
+      sh -c "pnpm db:migrate && pnpm db:setup &&
+             if [ \"$SEED_ON_START\" = \"true\" ]; then pnpm db:seed; fi"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    environment: *appenv
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

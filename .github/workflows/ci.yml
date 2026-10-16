@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: uanglite
+          POSTGRES_PASSWORD: uanglite
+          POSTGRES_DB: uanglite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uanglite"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://uanglite_app:uanglite_app@localhost:5432/uanglite
+      ADMIN_DATABASE_URL: postgres://uanglite:uanglite@localhost:5432/uanglite
+      SESSION_PASSWORD: ci-only-session-password-0123456789abcdef
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate and enforce RLS
+        run: |
+          pnpm db:migrate
+          pnpm db:setup
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests + agent evals
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
