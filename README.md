@@ -1,12 +1,26 @@
 # UangLite — a mini-ERP with an AI pilot
 
+**Live demo: [uanglite.ricothen.com](https://uanglite.ricothen.com)** · sign in with `demo@uanglite.dev` / `demo1234`
+
+| ![Dashboard](docs/screenshots/dashboard.png) |
+|:--:|
+| *Dashboard — revenue, receivables, stock alerts from 120+ seeded transactions* |
+
 **Inventory, invoicing and purchasing — with an LLM agent that doesn't just answer questions, but drafts the work:** restock purchase orders and payment-chasing emails, each gated behind explicit human approval.
+
+| ![Pilot AI](docs/screenshots/pilot.png) |
+|:--:|
+| *The Pilot answering a business question with `business_summary` — every number comes from a tool call* |
 
 > Inspired by [uang.ai](https://uang.ai) ("The AI Factory") and their mission of pairing deep business understanding with agentic AI. This project is a self-contained demonstration of exactly that stack: a multi-tenant business application where an LLM agent operates on real data, safely.
 
 ---
 
 ## Demo
+
+**Production:** [uanglite.ricothen.com](https://uanglite.ricothen.com) (Vercel + Neon Postgres)
+
+Run it yourself:
 
 ```bash
 docker compose up --build
