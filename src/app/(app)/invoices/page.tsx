@@ -5,6 +5,7 @@ import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listInvoices } from "@/lib/queries";
@@ -87,9 +88,25 @@ async function InvoicesTable({
                 <TH>Number</TH>
                 <TH>Customer</TH>
                 <TH>Issued</TH>
-                <TH>Due</TH>
+                <TH>
+                  <span className="flex items-center gap-1">
+                    Due
+                    <InfoTip
+                      side="bottom"
+                      text="Payment due date. Sent invoices past this date automatically count as Overdue in filters and on the dashboard."
+                    />
+                  </span>
+                </TH>
                 <TH className="text-right">Total</TH>
-                <TH>Status</TH>
+                <TH>
+                  <span className="flex items-center gap-1">
+                    Status
+                    <InfoTip
+                      side="bottom"
+                      text="Draft → Sent → Paid. Drafts can still be edited and do not affect revenue; Sent invoices are owed; Paid closes them; Void cancels."
+                    />
+                  </span>
+                </TH>
               </TR>
             </THead>
             <TBody>

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listProducts } from "@/lib/queries";
@@ -40,10 +41,42 @@ async function ProductsTable() {
               <TH>SKU</TH>
               <TH>Name</TH>
               <TH>Category</TH>
-              <TH className="text-right">Price</TH>
-              <TH className="text-right">Cost</TH>
-              <TH className="text-right">Stock</TH>
-              <TH className="text-right">Min</TH>
+              <TH className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Price
+                  <InfoTip
+                    side="bottom"
+                    text="What you charge customers on an invoice line."
+                  />
+                </span>
+              </TH>
+              <TH className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Cost
+                  <InfoTip
+                    side="bottom"
+                    text="What the product costs you (landed cost from suppliers). Optional — used for restock POs; invoices work even when it is empty."
+                  />
+                </span>
+              </TH>
+              <TH className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Stock
+                  <InfoTip
+                    side="bottom"
+                    text="Quantity on hand. Increases when a purchase order is received or you adjust stock manually; decreases when invoices are sent. Amber means at/below minimum, red means negative (oversold)."
+                  />
+                </span>
+              </TH>
+              <TH className="text-right">
+                <span className="flex items-center gap-1 justify-end">
+                  Min
+                  <InfoTip
+                    side="bottom"
+                    text="Minimum stock level (reorder point). When Stock falls to this number the product appears in Low stock alerts and the Pilot will propose restocking it."
+                  />
+                </span>
+              </TH>
               <TH>Status</TH>
               <TH className="w-28" />
             </TR>

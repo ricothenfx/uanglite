@@ -18,7 +18,9 @@
 
 ## Demo
 
-**Production:** [uanglite.ricothen.com](https://uanglite.ricothen.com) (Vercel + Neon Postgres)
+**Production:** [uanglite.ricothen.com](https://uanglite.ricothen.com) (Vercel + Neon Postgres) · [Help & FAQ](https://uanglite.ricothen.com/faq)
+
+The UI ships with a light/dark theme toggle (follows `prefers-color-scheme` on first visit, persisted per browser) and inline tooltips explaining every business metric and status.
 
 Run it yourself:
 

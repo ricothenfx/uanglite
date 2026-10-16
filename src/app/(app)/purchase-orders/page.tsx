@@ -5,6 +5,7 @@ import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { listPurchaseOrders } from "@/lib/queries";
@@ -46,9 +47,25 @@ async function PoTable() {
               <TH>Number</TH>
               <TH>Supplier</TH>
               <TH>Ordered</TH>
-              <TH>Expected</TH>
+              <TH>
+                <span className="flex items-center gap-1">
+                  Expected
+                  <InfoTip
+                    side="bottom"
+                    text="When the supplier is expected to deliver. Optional — leave it empty if the supplier did not commit to a date."
+                  />
+                </span>
+              </TH>
               <TH className="text-right">Subtotal</TH>
-              <TH>Status</TH>
+              <TH>
+                <span className="flex items-center gap-1">
+                  Status
+                  <InfoTip
+                    side="bottom"
+                    text="Draft → Sent → Received. Receiving a PO adds the ordered quantities to product stock automatically; the Pilot can create these as drafts for your approval."
+                  />
+                </span>
+              </TH>
             </TR>
           </THead>
           <TBody>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { unsealData } from "iron-session";
 
 const PUBLIC_PATHS = ["/login", "/register"];
+const OPEN_PATHS = ["/faq"];
 
 async function isAuthed(req: NextRequest): Promise<boolean> {
   const seal = req.cookies.get("uanglite_session")?.value;
@@ -19,8 +20,9 @@ export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const authed = await isAuthed(req);
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  const isOpen = OPEN_PATHS.some((p) => path.startsWith(p));
 
-  if (!authed && !isPublic) {
+  if (!authed && !isPublic && !isOpen) {
     const url = new URL("/login", req.nextUrl);
     if (path !== "/") url.searchParams.set("next", path);
     return NextResponse.redirect(url);

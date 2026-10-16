@@ -1,24 +1,30 @@
 import type { ReactNode } from "react";
 import { Card } from "./card";
+import { InfoTip } from "./info-tip";
 import { cn } from "@/lib/utils";
 
 export function StatCard({
   label,
   value,
   hint,
+  info,
   tone = "default",
   icon,
 }: {
   label: string;
   value: string;
   hint?: string;
+  info?: string;
   tone?: "default" | "warning" | "danger";
   icon?: ReactNode;
 }) {
   return (
     <Card className="px-5 py-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500">{label}</p>
+        <p className="flex items-center gap-1 text-xs font-medium text-zinc-500">
+          {label}
+          {info ? <InfoTip text={info} /> : null}
+        </p>
         {icon ? <span className="text-zinc-400">{icon}</span> : null}
       </div>
       <p

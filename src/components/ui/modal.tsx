@@ -29,7 +29,7 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-zinc-900/40 p-4 pt-16">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-16">
       <div
         className={cn(
           "w-full max-w-md rounded-xl border border-zinc-200 bg-white shadow-lg",

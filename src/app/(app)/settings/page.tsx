@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth";
 import { getOrgMembers } from "@/lib/org-queries";
@@ -53,7 +54,15 @@ async function SettingsContent() {
               <TR>
                 <TH>Name</TH>
                 <TH>Email</TH>
-                <TH>Role</TH>
+                <TH>
+                  <span className="flex items-center gap-1">
+                    Role
+                    <InfoTip
+                      side="bottom"
+                      text="Owners manage the workspace, members, currency and tax, and see AI costs. Staff can create products, invoices and POs but cannot change workspace settings."
+                    />
+                  </span>
+                </TH>
               </TR>
             </THead>
             <TBody>

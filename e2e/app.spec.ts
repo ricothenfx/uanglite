@@ -62,3 +62,51 @@ test.describe("UangLite smoke", () => {
     await expect(page.getByText("COF-ESP-250")).toHaveCount(0);
   });
 });
+
+test.describe("UangLite UX", () => {
+  test("faq page is public and answers the basics", async ({ page }) => {
+    await page.goto("/faq");
+    await expect(page).toHaveURL(/\/faq/);
+    await expect(page.getByText("Frequently asked questions")).toBeVisible();
+
+    await page.getByText("What is UangLite?").click();
+    await expect(
+      page.getByText("mini-ERP for small trading businesses"),
+    ).toBeVisible();
+  });
+
+  test("theme toggle switches to dark and persists across reloads", async ({
+    page,
+  }) => {
+    await page.goto("/faq");
+    const root = page.locator("html");
+    await expect(root).not.toHaveClass(/dark/);
+
+    await page.getByRole("button", { name: "Toggle dark mode" }).click();
+    await expect(root).toHaveClass(/dark/);
+
+    await page.reload();
+    await expect(root).toHaveClass(/dark/);
+
+    await page.getByRole("button", { name: "Toggle dark mode" }).click();
+    await expect(root).not.toHaveClass(/dark/);
+  });
+
+  test("dashboard metrics expose tooltips", async ({ page }) => {
+    await page.goto("/login");
+    await page.fill("#email", "demo@uanglite.dev");
+    await page.fill("#password", "demo1234");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    const btn = page.getByRole("button", {
+      name: /Info: Sum of all invoice totals/,
+    });
+    const tip = btn.locator("xpath=..").getByRole("tooltip");
+    await expect(tip).toHaveCSS("opacity", "0");
+
+    await btn.focus();
+    await expect(tip).toHaveCSS("opacity", "1");
+    await expect(tip).toContainText("calendar month");
+  });
+});

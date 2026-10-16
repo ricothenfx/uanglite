@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { AlertTriangle, Banknote, Clock, PackageSearch } from "lucide-react";
 import { PageHeader, PageSkeleton } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { StatCard } from "@/components/ui/stat";
 import { StatusBadge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -37,18 +38,21 @@ async function DashboardContent() {
           label="Revenue this month"
           value={fmtCompactMoney(data.revenueMtdCents, currency)}
           hint="Invoices issued (paid + sent)"
+          info="Sum of all invoice totals issued this calendar month, including paid and still-unpaid (sent) invoices. Drafts are excluded until you send them."
           icon={<Banknote className="size-4" />}
         />
         <StatCard
           label="Outstanding"
           value={fmtCompactMoney(data.outstanding.cents, currency)}
           hint={`${data.outstanding.count} sent invoice${data.outstanding.count === 1 ? "" : "s"} unpaid`}
+          info="Money your customers still owe you: invoices that have been sent but not yet paid or voided. This is your accounts receivable."
           icon={<Clock className="size-4" />}
         />
         <StatCard
           label="Overdue"
           value={String(data.overdue.count)}
           hint={fmtCompactMoney(data.overdue.cents, currency) + " past due date"}
+          info="Sent invoices that passed their due date without full payment. A good shortlist for payment reminders — the Pilot AI can draft them for you."
           tone={data.overdue.count > 0 ? "danger" : "default"}
           icon={<AlertTriangle className="size-4" />}
         />
@@ -56,6 +60,7 @@ async function DashboardContent() {
           label="Low stock"
           value={String(data.lowStock.count)}
           hint="Products at or below minimum"
+          info="Products whose quantity on hand reached the minimum stock level (the reorder point you set per product). Negative numbers mean overselling happened."
           tone={data.lowStock.count > 0 ? "warning" : "default"}
           icon={<PackageSearch className="size-4" />}
         />
@@ -64,7 +69,10 @@ async function DashboardContent() {
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Revenue — last 6 months</CardTitle>
+            <CardTitle className="flex items-center gap-1">
+              Revenue — last 6 months
+              <InfoTip text="Total invoiced value per month over the last six months, based on invoice issue date. Bars are drawn to scale against the busiest month." />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <RevenueChart
@@ -76,7 +84,10 @@ async function DashboardContent() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Stock alerts</CardTitle>
+            <CardTitle className="flex items-center gap-1">
+              Stock alerts
+              <InfoTip text="Products currently at or below their minimum stock level. Treat these as your immediate restock list — receive a purchase order or adjust stock to clear an alert." />
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {data.lowStock.items.length === 0 ? (
@@ -122,7 +133,15 @@ async function DashboardContent() {
                 <TH>Issued</TH>
                 <TH>Due</TH>
                 <TH className="text-right">Total</TH>
-                <TH>Status</TH>
+                <TH>
+                  <span className="flex items-center gap-1">
+                    Status
+                    <InfoTip
+                      side="bottom"
+                      text="Invoice lifecycle: Draft → Sent → Paid (or Void). Sent invoices that pass their due date show as Overdue until paid."
+                    />
+                  </span>
+                </TH>
               </TR>
             </THead>
             <TBody>

@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CircleHelp,
   FileText,
   Gauge,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -32,6 +34,7 @@ const NAV_SECONDARY = [
   { href: "/pilot", label: "Pilot AI", icon: Sparkles, highlight: true },
   { href: "/usage", label: "AI Usage", icon: Gauge },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/faq", label: "Help & FAQ", icon: CircleHelp },
 ] as const;
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -74,7 +77,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function NavFallback() {
   return (
     <div className="flex flex-col gap-1">
-      {Array.from({ length: 9 }).map((_, i) => (
+      {Array.from({ length: 10 }).map((_, i) => (
         <div key={i} className="h-8 animate-pulse rounded-lg bg-zinc-100" />
       ))}
     </div>
@@ -108,6 +111,7 @@ export function AppShell({
           <span className="text-base font-semibold tracking-tight">
             UangLite
           </span>
+          <ThemeToggle className="ml-auto" />
         </Link>
         <div className="flex-1 overflow-y-auto">
           <Nav />
@@ -130,15 +134,18 @@ export function AppShell({
             </span>
             UangLite
           </span>
-          <div className="ml-auto">{userChip}</div>
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
+            {userChip}
+          </div>
         </header>
 
         {mobileOpen ? (
           <div className="fixed inset-0 z-40 lg:hidden">
-            <div
-              className="absolute inset-0 bg-zinc-900/40"
-              onClick={() => setMobileOpen(false)}
-            />
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setMobileOpen(false)}
+              />
             <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-zinc-200 bg-white px-4 py-5">
               <div className="mb-4 flex items-center justify-between px-2">
                 <span className="flex items-center gap-2 text-sm font-semibold">
