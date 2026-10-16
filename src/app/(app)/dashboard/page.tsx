@@ -210,17 +210,24 @@ function RevenueChart({
 
   return (
     <div>
+      {/* column height minus the two text labels and gaps: bars scale inside
+          the space that is actually available, so flex shrink cannot clip them */}
       <div className="flex h-44 items-end gap-3">
         {months.map((m, i) => {
-          const height = Math.max(2, Math.round((values[i] / max) * 100));
+          const ratio = values[i] / max;
           return (
-            <div key={m.key} className="flex flex-1 flex-col items-center gap-1.5">
+            <div
+              key={m.key}
+              className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
+            >
               <span className="text-[10px] text-zinc-400">
                 {fmtCompactMoney(values[i], currency)}
               </span>
               <div
-                className="w-full rounded-t-md bg-emerald-500/90 transition-all"
-                style={{ height: `${height}%` }}
+                className="w-full shrink-0 rounded-t-md bg-emerald-500/90 transition-all"
+                style={{
+                  height: `max(2px, calc((100% - 2.75rem) * ${ratio}))`,
+                }}
               />
               <span className="text-[10px] font-medium text-zinc-500">
                 {m.label}

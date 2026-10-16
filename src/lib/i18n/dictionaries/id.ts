@@ -23,6 +23,7 @@ export const id: Dictionary = {
     customers: "Pelanggan",
     suppliers: "Pemasok",
     pilot: "Pilot AI",
+    drafts: "Draf AI",
     usage: "Penggunaan AI",
     settings: "Pengaturan",
     help: "Bantuan & FAQ",

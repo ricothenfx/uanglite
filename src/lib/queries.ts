@@ -202,14 +202,14 @@ export async function nextSequence(
     if (kind === "invoice") {
       const [row] = await tx
         .select({
-          maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${salesInvoices.number}, '\\D', '', 'g'), '')::int), 0)`,
+          maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${salesInvoices.number}, '^.*-', ''), '')::int), 0)`,
         })
         .from(salesInvoices);
       return String(row.maxNum + 1);
     }
     const [row] = await tx
       .select({
-        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.number}, '\\D', '', 'g'), '')::int), 0)`,
+        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.number}, '^.*-', ''), '')::int), 0)`,
       })
       .from(purchaseOrders);
     return String(row.maxNum + 1);

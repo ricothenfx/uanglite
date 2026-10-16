@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, lt } from "drizzle-orm";
 import { adminPool, dba } from "./index";
 import {
   agentDrafts,
@@ -18,6 +18,7 @@ import {
   users,
 } from "./schema";
 import { computeTotals, lineTotalCents } from "../lib/business";
+import { todayIso } from "../lib/utils";
 
 function mulberry32(seed: number) {
   let a = seed;
@@ -87,7 +88,7 @@ const TENANTS: TenantSeed[] = [
       { sku: "COF-DEC-250", name: "Decaf Colombia 250g", category: "beans", priceCents: 2100, costCents: 1250, minStock: 30, targetStock: 5 },
       { sku: "EQP-V60-02", name: "V60 Dripper 02 Ceramic", category: "equipment", priceCents: 3400, costCents: 1900, minStock: 20, targetStock: 90 },
       { sku: "EQP-GRD-HND", name: "Hand Grinder Pro", category: "equipment", priceCents: 8900, costCents: 5200, minStock: 10, targetStock: 40 },
-      { sku: "MER-TUM-BlK", name: "Tumbler Black 350ml", category: "merch", priceCents: 2500, costCents: 1300, minStock: 25, targetStock: -8 },
+      { sku: "MER-TUM-BLK", name: "Tumbler Black 350ml", category: "merch", priceCents: 2500, costCents: 1300, minStock: 25, targetStock: 110 },
       { sku: "MER-TUM-WHT", name: "Tumbler White 350ml", category: "merch", priceCents: 2500, costCents: 1300, minStock: 25, targetStock: 110 },
       { sku: "MER-TEE-BLK", name: "Brand Tee Black", category: "merch", priceCents: 2900, costCents: 1400, minStock: 15, targetStock: 70 },
       { sku: "PKG-BAG-500", name: "Kraft Bags 500 pack", category: "packaging", priceCents: 4500, costCents: 2600, minStock: 20, targetStock: 85 },
@@ -238,6 +239,25 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
   const year = new Date().getFullYear();
   let invSeq = 0;
 
+  type InvoiceSeed = {
+    customerId: string;
+    status: "draft" | "sent" | "paid";
+    issueDate: string;
+    dueDate: string;
+    subtotalCents: number;
+    taxBps: number;
+    totalCents: number;
+    createdAt: Date;
+    lines: {
+      productId: string;
+      description: string;
+      qty: number;
+      unitPriceCents: number;
+      lineTotalCents: number;
+    }[];
+  };
+  const invoiceSeeds: InvoiceSeed[] = [];
+
   for (let i = 0; i < tenant.invoiceCount; i++) {
     const ageDays = randInt(0, 175);
     const termDays = randInt(10, 40);
@@ -290,27 +310,47 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
             ? "paid"
             : "sent";
 
+    invoiceSeeds.push({
+      customerId: customer.id,
+      status,
+      issueDate,
+      dueDate,
+      subtotalCents: totals.subtotalCents,
+      taxBps: tenant.taxBps,
+      totalCents: totals.totalCents,
+      createdAt: tsDaysAgo(ageDays),
+      lines,
+    });
+  }
+
+  // issue invoice numbers in chronological order so numbering matches dates
+  invoiceSeeds.sort(
+    (a, b) =>
+      a.issueDate.localeCompare(b.issueDate) ||
+      a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  for (const seed of invoiceSeeds) {
     invSeq += 1;
-    const createdAt = tsDaysAgo(ageDays);
     const [invoice] = await dba
       .insert(salesInvoices)
       .values({
         orgId: org.id,
-        customerId: customer.id,
+        customerId: seed.customerId,
         number: `INV-${year}-${String(invSeq).padStart(4, "0")}`,
-        status,
-        issueDate,
-        dueDate,
-        subtotalCents: totals.subtotalCents,
-        taxBps: tenant.taxBps,
-        totalCents: totals.totalCents,
-        createdAt,
-        updatedAt: createdAt,
+        status: seed.status,
+        issueDate: seed.issueDate,
+        dueDate: seed.dueDate,
+        subtotalCents: seed.subtotalCents,
+        taxBps: seed.taxBps,
+        totalCents: seed.totalCents,
+        createdAt: seed.createdAt,
+        updatedAt: seed.createdAt,
       })
       .returning();
 
     await dba.insert(salesInvoiceItems).values(
-      lines.map((line) => ({
+      seed.lines.map((line) => ({
         orgId: org.id,
         invoiceId: invoice.id,
         productId: line.productId,
@@ -321,9 +361,9 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
       })),
     );
 
-    if (status === "sent" || status === "paid") {
+    if (seed.status === "sent" || seed.status === "paid") {
       await dba.insert(stockMovements).values(
-        lines.map((line) => ({
+        seed.lines.map((line) => ({
           orgId: org.id,
           productId: line.productId,
           qty: -line.qty,
@@ -331,7 +371,7 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
           refType: "invoice",
           refId: invoice.id,
           note: invoice.number,
-          createdAt,
+          createdAt: seed.createdAt,
         })),
       );
     }
@@ -339,6 +379,24 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
 
   const receivedQty = new Map<string, number>();
   let poSeq = 0;
+
+  type PoSeed = {
+    supplierId: string;
+    status: "draft" | "sent" | "received";
+    orderDate: string;
+    expectedDate: string;
+    subtotalCents: number;
+    createdAt: Date;
+    lines: {
+      productId: string;
+      description: string;
+      qty: number;
+      unitCostCents: number;
+      lineTotalCents: number;
+    }[];
+  };
+  const poSeeds: PoSeed[] = [];
+
   for (const supplierDef of tenant.suppliers) {
     const supplier = supplierRows.find((s) => s.name === supplierDef.name)!;
     const supplierSkus = tenant.products
@@ -366,52 +424,68 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
         (sum, l) => sum + l.lineTotalCents,
         0,
       );
-      poSeq += 1;
-      const createdAt = tsDaysAgo(ageDays);
-      const [po] = await dba
-        .insert(purchaseOrders)
-        .values({
-          orgId: org.id,
-          supplierId: supplier.id,
-          number: `PO-${year}-${String(poSeq).padStart(4, "0")}`,
-          status,
-          orderDate: isoDaysAgo(ageDays),
-          expectedDate: isoDaysAgo(ageDays - 14),
-          subtotalCents,
-          createdAt,
-          updatedAt: createdAt,
-        })
-        .returning();
+      poSeeds.push({
+        supplierId: supplier.id,
+        status,
+        orderDate: isoDaysAgo(ageDays),
+        expectedDate: isoDaysAgo(ageDays - 14),
+        subtotalCents,
+        createdAt: tsDaysAgo(ageDays),
+        lines: poLines,
+      });
+    }
+  }
 
-      await dba.insert(purchaseOrderItems).values(
-        poLines.map((line) => ({
+  // number POs in chronological order so numbering matches order dates
+  poSeeds.sort(
+    (a, b) =>
+      a.orderDate.localeCompare(b.orderDate) ||
+      a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  for (const seed of poSeeds) {
+    poSeq += 1;
+    const [po] = await dba
+      .insert(purchaseOrders)
+      .values({
+        orgId: org.id,
+        supplierId: seed.supplierId,
+        number: `PO-${year}-${String(poSeq).padStart(4, "0")}`,
+        status: seed.status,
+        orderDate: seed.orderDate,
+        expectedDate: seed.expectedDate,
+        subtotalCents: seed.subtotalCents,
+        createdAt: seed.createdAt,
+        updatedAt: seed.createdAt,
+      })
+      .returning();
+
+    await dba.insert(purchaseOrderItems).values(
+      seed.lines.map((line) => ({
+        orgId: org.id,
+        poId: po.id,
+        productId: line.productId,
+        description: line.description,
+        qty: line.qty,
+        unitCostCents: line.unitCostCents,
+        lineTotalCents: line.lineTotalCents,
+      })),
+    );
+
+    if (seed.status === "received") {
+      for (const line of seed.lines) {
+        const sku = line.description.split(" — ")[0];
+        receivedQty.set(sku, (receivedQty.get(sku) ?? 0) + line.qty);
+        await dba.insert(stockMovements).values({
           orgId: org.id,
-          poId: po.id,
           productId: line.productId,
-          description: line.description,
           qty: line.qty,
-          unitCostCents: line.unitCostCents,
-          lineTotalCents: line.lineTotalCents,
-        })),
-      );
-
-      if (status === "received") {
-        for (const line of poLines) {
-          receivedQty.set(
-            line.description.split(" — ")[0],
-            (receivedQty.get(line.description.split(" — ")[0]) ?? 0) + line.qty,
-          );
-          await dba.insert(stockMovements).values({
-            orgId: org.id,
-            productId: line.productId,
-            qty: line.qty,
-            reason: "purchase",
-            refType: "purchase_order",
-            refId: po.id,
-            note: po.number,
-            createdAt,
-          });
-        }
+          reason: "purchase",
+          refType: "purchase_order",
+          refId: po.id,
+          note: po.number,
+          createdAt: seed.createdAt,
+        });
       }
     }
   }
@@ -420,13 +494,15 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
     const product = productRows.find((p) => p.sku === seedProduct.sku)!;
     const sold = soldQty.get(seedProduct.sku) ?? 0;
     const received = receivedQty.get(seedProduct.sku) ?? 0;
-    const finalQty = seedProduct.targetStock + received - sold;
+    // stock can never go below zero — clamp after simulating sales/purchases
+    const finalQty = Math.max(0, seedProduct.targetStock + received - sold);
 
-    if (finalQty > -sold) {
+    const openingQty = finalQty + sold - received;
+    if (openingQty > 0) {
       await dba.insert(stockMovements).values({
         orgId: org.id,
         productId: product.id,
-        qty: Math.max(0, finalQty + sold - received),
+        qty: openingQty,
         reason: "adjustment",
         note: "Opening stock",
         createdAt: tsDaysAgo(180),
@@ -442,8 +518,9 @@ async function seedTenant(tenant: TenantSeed, passwordHash: string) {
     .select({ id: salesInvoices.id, number: salesInvoices.number })
     .from(salesInvoices)
     .where(
-      inArray(salesInvoices.status, ["sent"]),
+      and(eq(salesInvoices.status, "sent"), lt(salesInvoices.dueDate, todayIso())),
     )
+    .orderBy(asc(salesInvoices.dueDate))
     .limit(1);
 
   await dba.insert(agentDrafts).values({

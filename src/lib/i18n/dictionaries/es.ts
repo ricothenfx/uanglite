@@ -23,6 +23,7 @@ export const es: Dictionary = {
     customers: "Clientes",
     suppliers: "Proveedores",
     pilot: "Piloto IA",
+    drafts: "Borradores de IA",
     usage: "Uso de IA",
     settings: "Configuración",
     help: "Ayuda y preguntas frecuentes",

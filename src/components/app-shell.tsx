@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CircleHelp,
+  ClipboardList,
   FileText,
   Gauge,
   LayoutDashboard,
@@ -42,6 +43,7 @@ const NAV_SECONDARY: {
   highlight?: boolean;
 }[] = [
   { href: "/pilot", key: "pilot", icon: Sparkles, highlight: true },
+  { href: "/drafts", key: "drafts", icon: ClipboardList },
   { href: "/usage", key: "usage", icon: Gauge },
   { href: "/settings", key: "settings", icon: Settings },
   { href: "/faq", key: "help", icon: CircleHelp },

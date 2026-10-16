@@ -102,7 +102,7 @@ export async function createPoAction(
 
     const [seq] = await tx
       .select({
-        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.number}, '\\D', '', 'g'), '')::int), 0)`,
+        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${purchaseOrders.number}, '^.*-', ''), '')::int), 0)`,
       })
       .from(purchaseOrders);
     const number = `PO-${new Date().getFullYear()}-${String(seq.maxNum + 1).padStart(4, "0")}`;

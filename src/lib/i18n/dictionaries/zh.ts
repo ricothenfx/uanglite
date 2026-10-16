@@ -23,6 +23,7 @@ export const zh: Dictionary = {
     customers: "客户",
     suppliers: "供应商",
     pilot: "AI 领航员",
+    drafts: "AI 草稿",
     usage: "AI 用量",
     settings: "设置",
     help: "帮助与常见问题",

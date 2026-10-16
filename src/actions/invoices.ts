@@ -110,7 +110,7 @@ export async function createInvoiceAction(
 
     const [seq] = await tx
       .select({
-        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${salesInvoices.number}, '\\D', '', 'g'), '')::int), 0)`,
+        maxNum: sql<number>`coalesce(max(nullif(regexp_replace(${salesInvoices.number}, '^.*-', ''), '')::int), 0)`,
       })
       .from(salesInvoices);
     const number = `INV-${new Date().getFullYear()}-${String(seq.maxNum + 1).padStart(4, "0")}`;

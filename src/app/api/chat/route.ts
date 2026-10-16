@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     name: "uanglite",
     baseURL: baseUrl,
     apiKey,
+    includeUsage: true,
   });
   const tools = buildPilotTools(auth.org.id, auth.user.id);
   const startedAt = Date.now();

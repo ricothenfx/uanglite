@@ -21,6 +21,7 @@ export const en = {
     customers: "Customers",
     suppliers: "Suppliers",
     pilot: "Pilot AI",
+    drafts: "AI Drafts",
     usage: "AI Usage",
     settings: "Settings",
     help: "Help & FAQ",
