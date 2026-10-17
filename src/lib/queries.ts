@@ -144,11 +144,16 @@ export type PoListRow = {
   expectedDate: string | null;
   subtotalCents: number;
   supplierName: string;
+  arrivalOverdue: boolean;
 };
 
-export async function listPurchaseOrders(orgId: string): Promise<PoListRow[]> {
-  return withTenant(orgId, (tx) =>
-    tx
+export async function listPurchaseOrders(
+  orgId: string,
+  opts: { status?: PoStatus; openOnly?: boolean } = {},
+): Promise<PoListRow[]> {
+  const today = todayIso();
+  return withTenant(orgId, async (tx) => {
+    const rows = await tx
       .select({
         id: purchaseOrders.id,
         number: purchaseOrders.number,
@@ -160,8 +165,22 @@ export async function listPurchaseOrders(orgId: string): Promise<PoListRow[]> {
       })
       .from(purchaseOrders)
       .innerJoin(suppliers, eq(suppliers.id, purchaseOrders.supplierId))
-      .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.number)),
-  );
+      .where(
+        opts.status
+          ? eq(purchaseOrders.status, opts.status)
+          : opts.openOnly
+            ? inArray(purchaseOrders.status, ["draft", "sent"])
+            : undefined,
+      )
+      .orderBy(desc(purchaseOrders.orderDate), desc(purchaseOrders.number));
+    return rows.map((r) => ({
+      ...r,
+      arrivalOverdue:
+        r.status === "sent" &&
+        r.expectedDate !== null &&
+        r.expectedDate < today,
+    }));
+  });
 }
 
 export async function getPoDetail(orgId: string, id: string) {
@@ -419,6 +438,271 @@ export async function getStockMovements(orgId: string, productId: string) {
       .orderBy(desc(stockMovements.createdAt))
       .limit(50),
   );
+}
+
+export type SupplierStatsRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  poCount: number;
+  openPoCount: number;
+  orderedCents: number;
+  lastOrderDate: string | null;
+  skus: string[];
+};
+
+export async function listSuppliersWithStats(
+  orgId: string,
+  opts: { sku?: string } = {},
+): Promise<SupplierStatsRow[]> {
+  return withTenant(orgId, async (tx) => {
+    const stats = await tx
+      .select({
+        id: suppliers.id,
+        name: suppliers.name,
+        email: suppliers.email,
+        phone: suppliers.phone,
+        poCount: sql<number>`count(${purchaseOrders.id})::int`,
+        openPoCount:
+          sql<number>`count(case when ${purchaseOrders.status} in ('draft', 'sent') then 1 end)::int`,
+        orderedCents:
+          sql<number>`coalesce(sum(case when ${purchaseOrders.status} <> 'void' then ${purchaseOrders.subtotalCents} else 0 end), 0)::float8`,
+        lastOrderDate: sql<string | null>`max(${purchaseOrders.orderDate})`,
+      })
+      .from(suppliers)
+      .leftJoin(purchaseOrders, eq(purchaseOrders.supplierId, suppliers.id))
+      .groupBy(suppliers.id, suppliers.name, suppliers.email, suppliers.phone)
+      .orderBy(asc(suppliers.name));
+
+    const productRows = await tx
+      .selectDistinct({
+        supplierId: purchaseOrders.supplierId,
+        sku: products.sku,
+        name: products.name,
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(purchaseOrders, eq(purchaseOrders.id, purchaseOrderItems.poId))
+      .innerJoin(products, eq(products.id, purchaseOrderItems.productId))
+      .where(
+        opts.sku
+          ? sql`lower(${products.sku}) = lower(${opts.sku})`
+          : undefined,
+      )
+      .orderBy(asc(products.sku));
+
+    const skusBySupplier = new Map<string, string[]>();
+    for (const row of productRows) {
+      const list = skusBySupplier.get(row.supplierId) ?? [];
+      list.push(`${row.sku} — ${row.name}`);
+      skusBySupplier.set(row.supplierId, list);
+    }
+
+    return stats
+      .filter((s) => (opts.sku ? skusBySupplier.has(s.id) : true))
+      .map((s) => ({ ...s, skus: skusBySupplier.get(s.id) ?? [] }));
+  });
+}
+
+export type CustomerStatsRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  invoiceCount: number;
+  invoicedCents: number;
+  outstandingCents: number;
+  overdueCount: number;
+  overdueCents: number;
+};
+
+export async function listCustomersWithStats(
+  orgId: string,
+): Promise<CustomerStatsRow[]> {
+  const today = todayIso();
+  return withTenant(orgId, (tx) =>
+    tx
+      .select({
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        invoiceCount: sql<number>`count(${salesInvoices.id})::int`,
+        invoicedCents:
+          sql<number>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.totalCents} else 0 end), 0)::float8`,
+        outstandingCents:
+          sql<number>`coalesce(sum(case when ${salesInvoices.status} = 'sent' then ${salesInvoices.totalCents} else 0 end), 0)::float8`,
+        overdueCount:
+          sql<number>`count(case when ${salesInvoices.status} = 'sent' and ${salesInvoices.dueDate} < ${today} then 1 end)::int`,
+        overdueCents:
+          sql<number>`coalesce(sum(case when ${salesInvoices.status} = 'sent' and ${salesInvoices.dueDate} < ${today} then ${salesInvoices.totalCents} else 0 end), 0)::float8`,
+      })
+      .from(customers)
+      .leftJoin(salesInvoices, eq(salesInvoices.customerId, customers.id))
+      .groupBy(customers.id, customers.name, customers.email)
+      .orderBy(asc(customers.name)),
+  );
+}
+
+export type ProductSalesRow = {
+  sku: string;
+  name: string;
+  qtySold: number;
+  orderCount: number;
+  revenueCents: number;
+};
+
+export async function getProductSales(
+  orgId: string,
+  period: "week" | "month" | "quarter" | "year" | "all" = "month",
+): Promise<ProductSalesRow[]> {
+  const days =
+    period === "week"
+      ? 7
+      : period === "month"
+        ? 30
+        : period === "quarter"
+          ? 90
+          : period === "year"
+            ? 365
+            : null;
+  return withTenant(orgId, async (tx) => {
+    const conditions = [inArray(salesInvoices.status, ["sent", "paid"])];
+    if (days !== null) {
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+      conditions.push(
+        gte(salesInvoices.issueDate, since.toISOString().slice(0, 10)),
+      );
+    }
+    return tx
+      .select({
+        sku: products.sku,
+        name: products.name,
+        qtySold: sql<number>`coalesce(sum(${salesInvoiceItems.qty}), 0)::int`,
+        orderCount: sql<number>`count(distinct ${salesInvoices.id})::int`,
+        revenueCents:
+          sql<number>`coalesce(sum(${salesInvoiceItems.lineTotalCents}), 0)::float8`,
+      })
+      .from(salesInvoiceItems)
+      .innerJoin(salesInvoices, eq(salesInvoices.id, salesInvoiceItems.invoiceId))
+      .innerJoin(products, eq(products.id, salesInvoiceItems.productId))
+      .where(and(...conditions))
+      .groupBy(products.id, products.sku, products.name)
+      .orderBy(desc(sql`sum(${salesInvoiceItems.lineTotalCents})`))
+      .limit(10);
+  });
+}
+
+export type StockMovementRow = {
+  sku: string;
+  name: string;
+  qty: number;
+  reason: string;
+  note: string | null;
+  refType: string | null;
+  createdAt: Date;
+};
+
+export async function getStockMovementsBySku(
+  orgId: string,
+  sku: string,
+  limit = 20,
+): Promise<StockMovementRow[]> {
+  return withTenant(orgId, (tx) =>
+    tx
+      .select({
+        sku: products.sku,
+        name: products.name,
+        qty: stockMovements.qty,
+        reason: stockMovements.reason,
+        note: stockMovements.note,
+        refType: stockMovements.refType,
+        createdAt: stockMovements.createdAt,
+      })
+      .from(stockMovements)
+      .innerJoin(products, eq(products.id, stockMovements.productId))
+      .where(
+        and(
+          eq(stockMovements.orgId, orgId),
+          sql`lower(${products.sku}) = lower(${sku})`,
+        ),
+      )
+      .orderBy(desc(stockMovements.createdAt))
+      .limit(Math.min(Math.max(limit, 1), 50)),
+  );
+}
+
+export type InvoiceDetailResult = {
+  number: string;
+  customer: string;
+  customerEmail: string | null;
+  status: InvoiceStatus;
+  issueDate: string;
+  dueDate: string;
+  subtotalCents: number;
+  taxBps: number;
+  totalCents: number;
+  overdue: boolean;
+  items: {
+    sku: string;
+    description: string;
+    qty: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
+  }[];
+};
+
+export async function getInvoiceDetailByNumber(
+  orgId: string,
+  invoiceNumber: string,
+): Promise<InvoiceDetailResult | null> {
+  const today = todayIso();
+  return withTenant(orgId, async (tx) => {
+    const [invoice] = await tx
+      .select({
+        id: salesInvoices.id,
+        number: salesInvoices.number,
+        status: salesInvoices.status,
+        issueDate: salesInvoices.issueDate,
+        dueDate: salesInvoices.dueDate,
+        subtotalCents: salesInvoices.subtotalCents,
+        taxBps: salesInvoices.taxBps,
+        totalCents: salesInvoices.totalCents,
+        customerName: customers.name,
+        customerEmail: customers.email,
+      })
+      .from(salesInvoices)
+      .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
+      .where(
+        sql`lower(${salesInvoices.number}) = lower(${invoiceNumber})`,
+      )
+      .limit(1);
+    if (!invoice) return null;
+    const items = await tx
+      .select({
+        sku: products.sku,
+        description: salesInvoiceItems.description,
+        qty: salesInvoiceItems.qty,
+        unitPriceCents: salesInvoiceItems.unitPriceCents,
+        lineTotalCents: salesInvoiceItems.lineTotalCents,
+      })
+      .from(salesInvoiceItems)
+      .innerJoin(products, eq(products.id, salesInvoiceItems.productId))
+      .where(eq(salesInvoiceItems.invoiceId, invoice.id))
+      .orderBy(asc(salesInvoiceItems.id));
+    return {
+      number: invoice.number,
+      customer: invoice.customerName,
+      customerEmail: invoice.customerEmail,
+      status: invoice.status,
+      issueDate: invoice.issueDate,
+      dueDate: invoice.dueDate,
+      subtotalCents: invoice.subtotalCents,
+      taxBps: invoice.taxBps,
+      totalCents: invoice.totalCents,
+      overdue: isOverdue(invoice, today),
+      items,
+    };
+  });
 }
 
 export type BusinessSummary = {

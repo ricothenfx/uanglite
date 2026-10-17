@@ -48,6 +48,12 @@ For the AI pilot set `LLM_API_KEY` (any OpenAI-compatible endpoint works — Ope
 | `query_invoices` | read | Search invoices by status / overdue |
 | `business_summary` | read | Revenue, receivables, overdue, low stock KPIs |
 | `detect_anomalies` | read | Negative stock, 30+ day overdue aging, invoice totals that don't match their lines |
+| `query_suppliers` | read | Supplier directory with PO counts, open POs, ordered value and the products each supplier provides |
+| `query_customers` | read | Customer directory with invoiced, outstanding and overdue totals per customer |
+| `query_purchase_orders` | read | PO list with status filters and late-arrival flags |
+| `query_product_sales` | read | Best sellers by revenue over week/month/quarter/year from sent & paid invoices |
+| `query_stock_movements` | read | Dated stock movement history (sales, receipts, adjustments) for one SKU |
+| `query_invoice_detail` | read | Full line-item detail of one invoice by number |
 | `create_purchase_order_draft` | **write, approval-gated** | Creates a draft PO per supplier (never sends, never receives) |
 | `draft_payment_reminder` | **write, approval-gated** | Drafts a reminder email (never sends) |
 

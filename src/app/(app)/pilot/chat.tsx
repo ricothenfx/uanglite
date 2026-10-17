@@ -12,12 +12,18 @@ import {
   BadgeCheck,
   Ban,
   BarChart3,
+  ClipboardList,
+  FileText,
   FileWarning,
+  History,
   Loader2,
   Package,
   ReceiptText,
   ShoppingCart,
   Table2,
+  TrendingUp,
+  Truck,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +53,7 @@ const SUGGESTION_KEYS = [
   "suggestion2",
   "suggestion3",
   "suggestion4",
+  "suggestion5",
 ] as const;
 
 export function PilotChat({ currency }: { currency: string }) {
@@ -320,6 +327,12 @@ const TOOL_META: Record<string, { icon: typeof Package }> = {
   query_invoices: { icon: ReceiptText },
   business_summary: { icon: BarChart3 },
   detect_anomalies: { icon: FileWarning },
+  query_suppliers: { icon: Truck },
+  query_customers: { icon: Users },
+  query_purchase_orders: { icon: ClipboardList },
+  query_product_sales: { icon: TrendingUp },
+  query_stock_movements: { icon: History },
+  query_invoice_detail: { icon: FileText },
   create_purchase_order_draft: { icon: ShoppingCart },
   draft_payment_reminder: { icon: AlertTriangle },
 };
@@ -329,6 +342,12 @@ const TOOL_LABELS: Record<string, keyof Dictionary["chat"]> = {
   query_invoices: "toolInvoices",
   business_summary: "toolSummary",
   detect_anomalies: "toolAnomalies",
+  query_suppliers: "toolSuppliers",
+  query_customers: "toolCustomers",
+  query_purchase_orders: "toolPurchaseOrders",
+  query_product_sales: "toolProductSales",
+  query_stock_movements: "toolMovements",
+  query_invoice_detail: "toolInvoiceDetail",
   create_purchase_order_draft: "toolPoDraft",
   draft_payment_reminder: "toolReminderDraft",
 };
@@ -417,6 +436,86 @@ type AnomalyOutput = {
     type: string;
     severity: string;
     description: string;
+  }[];
+};
+
+type SupplierOutput = {
+  count?: number;
+  suppliers?: {
+    name: string;
+    email: string | null;
+    poCount: number;
+    openPoCount: number;
+    orderedCents: number;
+    skus: string[];
+  }[];
+};
+
+type CustomerOutput = {
+  count?: number;
+  customers?: {
+    name: string;
+    email: string | null;
+    invoiceCount: number;
+    invoicedCents: number;
+    outstandingCents: number;
+    overdueCount: number;
+    overdueCents: number;
+  }[];
+};
+
+type PoListOutput = {
+  count?: number;
+  purchaseOrders?: {
+    number: string;
+    supplierName: string;
+    status: string;
+    orderDate: string;
+    expectedDate: string | null;
+    subtotalCents: number;
+    arrivalOverdue: boolean;
+  }[];
+};
+
+type ProductSalesOutput = {
+  period?: string;
+  products?: {
+    sku: string;
+    name: string;
+    qtySold: number;
+    orderCount: number;
+    revenueCents: number;
+  }[];
+};
+
+type MovementsOutput = {
+  sku?: string;
+  count?: number;
+  movements?: {
+    qty: number;
+    reason: string;
+    note: string | null;
+    createdAt: string;
+  }[];
+};
+
+type InvoiceDetailOutput = {
+  error?: string;
+  number?: string;
+  customer?: string;
+  status?: string;
+  issueDate?: string;
+  dueDate?: string;
+  subtotalCents?: number;
+  taxBps?: number;
+  totalCents?: number;
+  overdue?: boolean;
+  items?: {
+    sku: string;
+    description: string;
+    qty: number;
+    unitPriceCents: number;
+    lineTotalCents: number;
   }[];
 };
 
@@ -580,6 +679,261 @@ function OutputView({
           </li>
         ))}
       </ul>
+    );
+  }
+
+  if (name === "query_suppliers") {
+    const data = output as SupplierOutput;
+    const rows = data.suppliers ?? [];
+    if (rows.length === 0) {
+      return <p className="text-xs text-zinc-500">{c.noSuppliers}</p>;
+    }
+    return (
+      <div className="space-y-1.5">
+        {rows.map((s) => (
+          <div key={s.name} className="border-t border-zinc-100 pt-1.5 first:border-0 first:pt-0">
+            <p className="text-xs font-medium text-zinc-700">{s.name}</p>
+            {s.email ? (
+              <p className="text-[11px] text-zinc-400">{s.email}</p>
+            ) : null}
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              {interpolate(c.supplierStats, {
+                pos: s.poCount,
+                open: s.openPoCount,
+                ordered: fmtMoney(s.orderedCents, currency),
+              })}
+            </p>
+            {s.skus.length > 0 ? (
+              <p className="text-[11px] text-zinc-500">
+                {interpolate(c.suppliesProducts, { list: s.skus.join(", ") })}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (name === "query_customers") {
+    const data = output as CustomerOutput;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-zinc-400">
+              <th className="py-1 pr-3 font-medium">{c.outCustomer}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.invoicesIssued}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.outstanding}</th>
+              <th className="py-1 text-right font-medium">{c.overdue}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.customers ?? []).map((cu) => (
+              <tr key={cu.name} className="border-t border-zinc-100">
+                <td className="py-1 pr-3">
+                  {cu.name}
+                  {cu.email ? (
+                    <span className="block text-[10px] text-zinc-400">{cu.email}</span>
+                  ) : null}
+                </td>
+                <td className="py-1 pr-3 text-right">{cu.invoiceCount}</td>
+                <td className="py-1 pr-3 text-right font-medium">
+                  {fmtMoney(cu.outstandingCents, currency)}
+                </td>
+                <td
+                  className={cn(
+                    "py-1 text-right",
+                    cu.overdueCents > 0 ? "font-semibold text-red-600" : "text-zinc-400",
+                  )}
+                >
+                  {cu.overdueCount > 0
+                    ? `${cu.overdueCount} · ${fmtMoney(cu.overdueCents, currency)}`
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (name === "query_purchase_orders") {
+    const data = output as PoListOutput;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-zinc-400">
+              <th className="py-1 pr-3 font-medium">{c.outNumber}</th>
+              <th className="py-1 pr-3 font-medium">{c.outSupplier}</th>
+              <th className="py-1 pr-3 font-medium">{c.outStatus}</th>
+              <th className="py-1 pr-3 font-medium">{c.outExpected}</th>
+              <th className="py-1 text-right font-medium">{c.outSubtotal}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.purchaseOrders ?? []).map((po) => (
+              <tr key={po.number} className="border-t border-zinc-100">
+                <td className="py-1 pr-3 font-mono">{po.number}</td>
+                <td className="py-1 pr-3">{po.supplierName}</td>
+                <td className="py-1 pr-3">
+                  {po.arrivalOverdue ? (
+                    <Badge variant="danger">{c.overdueBadge}</Badge>
+                  ) : (
+                    <Badge>{statusLabels[po.status] ?? po.status}</Badge>
+                  )}
+                </td>
+                <td className="py-1 pr-3 text-zinc-400">{po.expectedDate ?? "—"}</td>
+                <td className="py-1 text-right font-medium">
+                  {fmtMoney(po.subtotalCents, currency)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (name === "query_product_sales") {
+    const data = output as ProductSalesOutput;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-zinc-400">
+              <th className="py-1 pr-3 font-medium">{c.outSku}</th>
+              <th className="py-1 pr-3 font-medium">{c.outProduct}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.outQtySold}</th>
+              <th className="py-1 text-right font-medium">{c.revenue}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.products ?? []).map((p) => (
+              <tr key={p.sku} className="border-t border-zinc-100">
+                <td className="py-1 pr-3 font-mono">{p.sku}</td>
+                <td className="py-1 pr-3">{p.name}</td>
+                <td className="py-1 pr-3 text-right">
+                  {p.qtySold}
+                  <span className="ml-1 text-[10px] text-zinc-400">
+                    ({p.orderCount})
+                  </span>
+                </td>
+                <td className="py-1 text-right font-semibold">
+                  {fmtMoney(p.revenueCents, currency)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (name === "query_stock_movements") {
+    const data = output as MovementsOutput;
+    if ((data.count ?? 0) === 0) {
+      return (
+        <p className="text-xs text-zinc-500">
+          {interpolate(c.noMovements, { sku: data.sku ?? "" })}
+        </p>
+      );
+    }
+    return (
+      <ul className="space-y-1 text-xs">
+        {(data.movements ?? []).map((m, i) => (
+          <li key={i} className="flex items-start gap-2 border-t border-zinc-100 pt-1 first:border-0 first:pt-0">
+            <span
+              className={cn(
+                "w-10 shrink-0 text-right font-semibold",
+                m.qty >= 0 ? "text-emerald-700" : "text-red-600",
+              )}
+            >
+              {m.qty >= 0 ? `+${m.qty}` : m.qty}
+            </span>
+            <span className="text-zinc-600">
+              {m.reason}
+              {m.note ? <span className="text-zinc-400"> — {m.note}</span> : null}
+              <span className="block text-[10px] text-zinc-400">
+                {String(m.createdAt).slice(0, 10)}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (name === "query_invoice_detail") {
+    const data = output as InvoiceDetailOutput;
+    if (data.error) {
+      return <p className="text-xs text-red-600">{data.error}</p>;
+    }
+    return (
+      <div className="text-xs">
+        <p className="font-medium text-zinc-700">
+          {data.number} · {data.customer}
+          {data.overdue ? (
+            <Badge variant="danger" className="ml-1.5">
+              {c.overdueBadge}
+            </Badge>
+          ) : (
+            <Badge className="ml-1.5">
+              {statusLabels[data.status ?? ""] ?? data.status}
+            </Badge>
+          )}
+        </p>
+        <p className="mt-0.5 text-[11px] text-zinc-400">
+          {data.issueDate} → {data.dueDate}
+        </p>
+        <table className="mt-2 w-full">
+          <thead>
+            <tr className="text-left text-zinc-400">
+              <th className="py-1 pr-3 font-medium">{c.outSku}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.outQty}</th>
+              <th className="py-1 pr-3 text-right font-medium">{c.outUnitPrice}</th>
+              <th className="py-1 text-right font-medium">{c.outLineTotal}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.items ?? []).map((it) => (
+              <tr key={it.sku + it.description} className="border-t border-zinc-100">
+                <td className="py-1 pr-3 font-mono">{it.sku}</td>
+                <td className="py-1 pr-3 text-right">{it.qty}</td>
+                <td className="py-1 pr-3 text-right text-zinc-500">
+                  {fmtMoney(it.unitPriceCents, currency)}
+                </td>
+                <td className="py-1 text-right font-medium">
+                  {fmtMoney(it.lineTotalCents, currency)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-1.5 space-y-0.5 border-t border-zinc-200 pt-1.5 text-right">
+          <p className="text-zinc-500">
+            {interpolate(c.subtotalLabel, {
+              amount: fmtMoney(data.subtotalCents ?? 0, currency),
+            })}
+          </p>
+          <p className="text-zinc-500">
+            {interpolate(c.taxLabel, {
+              amount: fmtMoney(
+                Math.round(
+                  ((data.subtotalCents ?? 0) * (data.taxBps ?? 0)) / 10_000,
+                ),
+                currency,
+              ),
+            })}
+          </p>
+          <p className="font-semibold text-zinc-700">
+            {interpolate(c.totalLabel, {
+              amount: fmtMoney(data.totalCents ?? 0, currency),
+            })}
+          </p>
+        </div>
+      </div>
     );
   }
 

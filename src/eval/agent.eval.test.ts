@@ -88,6 +88,84 @@ function makeDeps() {
       ],
     })),
     detectAnomalies: vi.fn(async () => []),
+    listSuppliersWithStats: vi.fn(async () => [
+      {
+        id: "s1",
+        name: "Gayo Green Beans Importer",
+        email: "sales@gayo.example",
+        phone: null,
+        poCount: 4,
+        openPoCount: 1,
+        orderedCents: 320_000,
+        lastOrderDate: "2026-02-01",
+        skus: ["COF-DEC-250 — Decaf Colombia 250g", "COF-ESP-250 — Espresso Blend 250g"],
+      },
+    ]),
+    listCustomersWithStats: vi.fn(async () => [
+      {
+        id: "c1",
+        name: "Brekie Bar @ Katong",
+        email: "billing1@nusantara-coffee.example",
+        invoiceCount: 12,
+        invoicedCents: 1_100_000,
+        outstandingCents: 340_000,
+        overdueCount: 2,
+        overdueCents: 90_000,
+      },
+    ]),
+    listPurchaseOrders: vi.fn(async () => [
+      {
+        id: "po1",
+        number: "PO-2026-0098",
+        status: "sent" as const,
+        orderDate: "2026-01-28",
+        expectedDate: "2026-02-10",
+        subtotalCents: 75_000,
+        supplierName: "Gayo Green Beans Importer",
+        arrivalOverdue: true,
+      },
+    ]),
+    getProductSales: vi.fn(async () => [
+      {
+        sku: "COF-ESP-250",
+        name: "Espresso Blend 250g",
+        qtySold: 84,
+        orderCount: 11,
+        revenueCents: 907_200,
+      },
+    ]),
+    getStockMovementsBySku: vi.fn(async () => [
+      {
+        sku: "COF-ESP-250",
+        name: "Espresso Blend 250g",
+        qty: -12,
+        reason: "invoice",
+        note: "INV-2026-0007",
+        refType: "sales_invoice",
+        createdAt: new Date("2026-02-10T08:00:00Z"),
+      },
+    ]),
+    getInvoiceDetailByNumber: vi.fn(async () => ({
+      number: "INV-2026-0007",
+      customer: "Brekie Bar @ Katong",
+      customerEmail: "billing1@nusantara-coffee.example",
+      status: "sent" as const,
+      issueDate: "2026-01-05",
+      dueDate: "2026-01-19",
+      subtotalCents: 100_000,
+      taxBps: 900,
+      totalCents: 109_000,
+      overdue: true,
+      items: [
+        {
+          sku: "COF-ESP-250",
+          description: "COF-ESP-250 — Espresso Blend 250g",
+          qty: 80,
+          unitPriceCents: 1250,
+          lineTotalCents: 100_000,
+        },
+      ],
+    })),
     createDraftPo: vi.fn(async () => ({
       ok: true as const,
       poNumber: "PO-2026-0099",
@@ -258,5 +336,73 @@ describe("pilot agent orchestration", () => {
 
     expect(deps.getBusinessSummary).toHaveBeenCalledWith(ORG_ID, "month");
     expect(result.text).toContain("12,500.00");
+  });
+
+  it("answers supplier questions from the query_suppliers tool", async () => {
+    const deps = makeDeps();
+    const { generate } = makeAgent(deps, [
+      toolCall("c1", "query_suppliers", { sku: "COF-DEC-250" }),
+      text("COF-DEC-250 is supplied by Gayo Green Beans Importer."),
+    ]);
+
+    const result = await generate([
+      { role: "user", content: "Who supplies COF-DEC-250?" },
+    ]);
+
+    expect(deps.listSuppliersWithStats).toHaveBeenCalledWith(ORG_ID, {
+      sku: "COF-DEC-250",
+    });
+    expect(result.text).toContain("Gayo Green Beans Importer");
+  });
+
+  it("answers best-seller questions from the query_product_sales tool", async () => {
+    const deps = makeDeps();
+    const { generate } = makeAgent(deps, [
+      toolCall("c1", "query_product_sales", { period: "month" }),
+      text("Our best seller this month is Espresso Blend 250g with 84 units."),
+    ]);
+
+    const result = await generate([
+      { role: "user", content: "Which products sell best this month?" },
+    ]);
+
+    expect(deps.getProductSales).toHaveBeenCalledWith(ORG_ID, "month");
+    expect(result.text).toContain("Espresso Blend 250g");
+  });
+
+  it("answers what-is-on-this-invoice questions from query_invoice_detail", async () => {
+    const deps = makeDeps();
+    const { generate } = makeAgent(deps, [
+      toolCall("c1", "query_invoice_detail", { invoiceNumber: "INV-2026-0007" }),
+      text("INV-2026-0007 has 80x COF-ESP-250, total 1,090.00."),
+    ]);
+
+    const result = await generate([
+      { role: "user", content: "What is on invoice INV-2026-0007?" },
+    ]);
+
+    expect(deps.getInvoiceDetailByNumber).toHaveBeenCalledWith(
+      ORG_ID,
+      "INV-2026-0007",
+    );
+    expect(result.text).toContain("80x COF-ESP-250");
+  });
+
+  it("answers order-status questions from the query_purchase_orders tool", async () => {
+    const deps = makeDeps();
+    const { generate } = makeAgent(deps, [
+      toolCall("c1", "query_purchase_orders", { openOnly: true }),
+      text("PO-2026-0098 is sent and its expected date has passed."),
+    ]);
+
+    const result = await generate([
+      { role: "user", content: "Which orders are still open or late?" },
+    ]);
+
+    expect(deps.listPurchaseOrders).toHaveBeenCalledWith(ORG_ID, {
+      status: undefined,
+      openOnly: true,
+    });
+    expect(result.text).toContain("PO-2026-0098");
   });
 });
